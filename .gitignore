@@ -1,10 +1,17 @@
 *.pyc
 *.pyo
-__pycache__/*
+__pycache__/
 .venv/
 .env/
 data/
 *.json
-logs/
 lightning_logs/
 *.ckpt
+
+# keep the dirs, ignore their contents
+runs/*
+!runs/.gitkeep
+logs/*
+!logs/.gitkeep
+submissions/*
+!submissions/.gitkeep

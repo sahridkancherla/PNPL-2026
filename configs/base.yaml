@@ -1,0 +1,18 @@
+# Shared defaults. Override per-run with a second file.
+track: deep
+
+tmin: 0.0
+tmax: 1.0
+sfreq: 250
+n_channels: 306
+n_classes: 50
+
+model: cnn_baseline
+model_kwargs: {}
+
+lr: 0.001
+weight_decay: 0.0
+batch_size: 64
+max_epochs: 50
+num_workers: 4
+seed: 0

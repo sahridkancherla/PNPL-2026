@@ -1,0 +1,18 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=64gb:ngpus=1:gpu_type=RTX6000
+#PBS -l walltime=08:00:00
+#PBS -N pnpl-deep
+#PBS -j oe
+#PBS -o logs/
+
+# Verify gpu_type and the cpus/mem/walltime combination against Imperial's
+# current job-sizing table -- CX3 rejects or indefinitely queues jobs that
+# don't match an allowed job class.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+
+uv run python -m pnpl2026.cli.train --config configs/base.yaml configs/deep.yaml

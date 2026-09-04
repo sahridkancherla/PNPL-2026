@@ -1,0 +1,19 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=64gb:ngpus=1:gpu_type=RTX6000
+#PBS -l walltime=08:00:00
+#PBS -N pnpl-sweep
+#PBS -J 1-20
+#PBS -j oe
+#PBS -o logs/
+
+# Array job: one task per line of configs/sweep.txt, each line a config path.
+# Submit twenty runs with a single qsub.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+
+CFG=$(sed -n "${PBS_ARRAY_INDEX}p" configs/sweep.txt)
+uv run python -m pnpl2026.cli.train --config configs/base.yaml "$CFG"
