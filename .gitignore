@@ -3,6 +3,5 @@
 __pycache__/*
 .venv/
 .env/
-# local archives
-*.zip
+data/
 *.json
