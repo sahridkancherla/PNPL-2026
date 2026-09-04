@@ -1,0 +1,5 @@
+* text=auto
+
+# Must stay LF -- these execute on the Linux HPC.
+*.pbs text eol=lf
+*.sh  text eol=lf
