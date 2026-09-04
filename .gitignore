@@ -5,3 +5,6 @@ __pycache__/*
 .env/
 data/
 *.json
+logs/
+lightning_logs/
+*.ckpt
