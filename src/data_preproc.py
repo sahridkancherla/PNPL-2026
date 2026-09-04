@@ -10,7 +10,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 TMIN, TMAX, SFREQ = 0.0, 1.0, 250
 
-DATA_PATH = Path("./data")
+DATA_PATH = Path(__file__).parent.parent / "data"
 
 train_raw = LibriBrain100(
     data_path=DATA_PATH,
