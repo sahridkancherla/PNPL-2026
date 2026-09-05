@@ -23,7 +23,7 @@ class Config:
     sfreq: int = 250
     n_channels: int = 306
     n_classes: int = 50
-    val_subjects: list[int] = field(default_factory=list)
+    val_sessions: list[str] = field(default_factory=list)
 
     # model
     model: str = "cnn_baseline"

@@ -3,15 +3,18 @@
 __pycache__/
 .venv/
 .env/
-data/
 *.json
 lightning_logs/
 *.ckpt
 
-# keep the dirs, ignore their contents
-runs/*
-!runs/.gitkeep
-logs/*
-!logs/.gitkeep
-submissions/*
-!submissions/.gitkeep
+# Anchored with a leading slash: an unanchored "data/" also matches
+# src/pnpl2026/data/ and silently drops the package from git.
+/data/
+
+# Keep the dirs, ignore their contents.
+/runs/*
+!/runs/.gitkeep
+/logs/*
+!/logs/.gitkeep
+/submissions/*
+!/submissions/.gitkeep

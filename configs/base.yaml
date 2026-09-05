@@ -7,6 +7,9 @@ sfreq: 250
 n_channels: 306
 n_classes: 50
 
+# Sessions held out for validation; empty = last session in sorted order.
+val_sessions: []
+
 model: cnn_baseline
 model_kwargs: {}
 
