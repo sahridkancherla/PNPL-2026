@@ -49,13 +49,44 @@ class LibriBrainDataModule(L.LightningDataModule):
             counts > 0, counts.sum() / (counts * self.cfg.n_classes), torch.zeros_like(counts)
         )
 
+        self._report(base, full, train_idx, val_idx, labels, counts)
+
+    def _report(self, base, full, train_idx, val_idx, labels, counts) -> None:
+        """Print what the filter and split actually did.
+
+        Without this the run is opaque: a broken vocabulary filter or a
+        degenerate split still produces a healthy-looking loss curve.
+        """
+        sessions = full.sessions()
+        held = sorted({sessions[i] for i in val_idx})
+        val_classes = {labels[i] for i in val_idx}
+        n_train_classes = int((counts > 0).sum())
+
+        print(
+            f"[data] {len(full)} scored samples kept of {len(base.samples)} "
+            f"({100 * len(full) / max(len(base.samples), 1):.1f}%)"
+        )
+        print(f"[data] sessions: {sorted(set(sessions))} | held out for val: {held}")
+        print(f"[data] train {len(train_idx)} | val {len(val_idx)}")
+        print(
+            f"[data] classes present: train {n_train_classes}/{self.cfg.n_classes}, "
+            f"val {len(val_classes)}/{self.cfg.n_classes}"
+        )
+        if len(val_classes) < self.cfg.n_classes:
+            missing = self.cfg.n_classes - len(val_classes)
+            print(
+                f"[data] WARNING: {missing} class(es) absent from validation -- "
+                "balanced accuracy averages only over classes that appear, so it "
+                "is not comparable to the leaderboard. Consider other val_sessions."
+            )
+
     def _loader(self, dataset, shuffle: bool) -> DataLoader:
         return DataLoader(
             dataset,
             batch_size=self.cfg.batch_size,
             shuffle=shuffle,
             num_workers=self.cfg.num_workers,
-            pin_memory=True,
+            pin_memory=torch.cuda.is_available(),
             drop_last=False,
         )
 

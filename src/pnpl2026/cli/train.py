@@ -37,6 +37,11 @@ def git_sha() -> str:
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument("--config", nargs="+", required=True)
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite an existing run directory that already holds results.",
+    )
     return p.parse_args()
 
 
@@ -46,6 +51,15 @@ def main() -> None:
     L.seed_everything(cfg.seed, workers=True)
 
     run_dir = RUNS_DIR / cfg.run_name
+    # Lightning deletes prior logs and checkpoints in a reused directory. Losing
+    # the record of an earlier score is worse than an early exit, so make the
+    # overwrite explicit.
+    existing = list(run_dir.glob("*.ckpt")) + list(run_dir.glob("metrics.csv"))
+    if existing and not args.force:
+        raise SystemExit(
+            f"{run_dir} already holds results ({len(existing)} file(s)). "
+            f"Change run_name in your config, or pass --force to overwrite."
+        )
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "config.yaml").write_text(
         yaml.safe_dump(cfg.to_dict(), sort_keys=False), encoding="utf-8"
