@@ -10,7 +10,7 @@ n_classes: 50
 # BAcc@k is the scored metric; chance is k/n_classes (0.20 at k=10).
 metric_k: 10
 
-# Sessions held out for validation; empty = last session in sorted order.
+# Sessions held out for validation; empty = auto-select by val_fraction below.
 val_sessions: []
 
 # Used when val_sessions is empty: hold out whole sessions from the end

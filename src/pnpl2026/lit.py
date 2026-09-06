@@ -1,9 +1,9 @@
 """LightningModule: loss, optimiser, and the scored metric.
 
 Validation reports BAcc@k (see .metrics): macro-averaged Recall@k over the
-50-word vocabulary. Both BAcc@1 and BAcc@`metric_k` are logged, because chance
-is k/50 and reading a top-1 number against the top-10 floor of 0.20 makes a
-working model look broken.
+50-word vocabulary. BAcc@`metric_k` (10 by default) is the leaderboard metric
+and what early stopping / checkpointing track; BAcc@1 is logged alongside it
+only as a tiebreaker.
 """
 
 from __future__ import annotations
