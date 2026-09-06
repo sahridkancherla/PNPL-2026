@@ -17,7 +17,7 @@ val_fraction: 0.1
 model: cnn_baseline
 model_kwargs: {}
 
-lr: 1e-6
+lr: 1e-4
 weight_decay: 0.0
 batch_size: 64
 max_epochs: 50   # early stopping ends the run before this in practice
