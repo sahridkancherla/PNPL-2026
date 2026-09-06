@@ -41,26 +41,33 @@ def load_run(run_dir) -> dict | None:
     if prov_path.exists():
         git_sha = json.loads(prov_path.read_text(encoding="utf-8")).get("git_sha", "unknown")
 
+    # Runs predating the BAcc@10 change logged val/balanced_acc (top-1) instead.
+    # Fall back to it rather than reporting None for a run that has real
+    # results, and name the column used so the two are never silently compared:
+    # chance is 0.20 for bacc10 against 0.02 for the top-1 metric.
     metric_col = f"val/bacc{config.get('metric_k', 10)}"
-    best_row = (
-        per_epoch[metric_col].idxmax() if metric_col in per_epoch.columns else None
-    )
+    if metric_col not in per_epoch.columns:
+        fallback = [
+            c for c in per_epoch.columns if c.startswith("val/") and c != "val/loss"
+        ]
+        metric_col = fallback[0] if fallback else None
+
+    best_row = per_epoch[metric_col].idxmax() if metric_col else None
     ckpt = run_dir / "best.ckpt"
 
     return {
         "run": run_dir.name,
         "epochs": int(per_epoch.index.max()) + 1,
-        "best_epoch": int(best_row) if best_row is not None else None,
-        "best_bacc10": (
+        "metric": metric_col or "none found",
+        "best": (
             round(float(per_epoch.loc[best_row, metric_col]), 4)
             if best_row is not None
             else None
         ),
-        "last_bacc10": (
-            round(float(per_epoch[metric_col].iloc[-1]), 4)
-            if metric_col in per_epoch.columns
-            else None
+        "last": (
+            round(float(per_epoch[metric_col].iloc[-1]), 4) if metric_col else None
         ),
+        "best_epoch": int(best_row) if best_row is not None else None,
         "model": config.get("model", "?"),
         "lr": config.get("lr", "?"),
         "git_sha": git_sha[:8],
@@ -70,9 +77,7 @@ def load_run(run_dir) -> dict | None:
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument(
-        "--sort-by", default="best_bacc10", help="Column to sort by (default: best_bacc10)"
-    )
+    p.add_argument("--sort-by", default="best", help="Column to sort by (default: best)")
     args = p.parse_args()
 
     rows = [
@@ -85,6 +90,15 @@ def main() -> None:
     table = pd.DataFrame(rows).sort_values(args.sort_by, ascending=False, na_position="last")
     with pd.option_context("display.max_rows", None, "display.width", 200):
         print(table.to_string(index=False))
+
+    metrics_used = {r["metric"] for r in rows}
+    if len(metrics_used) > 1:
+        print(
+            f"\nWARNING: runs use different metrics ({', '.join(sorted(metrics_used))}). "
+            "Scores are NOT comparable across them -- chance is 0.20 for bacc10 "
+            "but 0.02 for the older top-1 val/balanced_acc. Re-run older configs "
+            "with the current pipeline for a comparable number."
+        )
 
 
 if __name__ == "__main__":
