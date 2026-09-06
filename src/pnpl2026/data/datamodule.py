@@ -35,7 +35,9 @@ class LibriBrainDataModule(L.LightningDataModule):
             partition="train",
         )
         full = CompetitionWordDataset(base)
-        train_idx, val_idx = session_split(full.sessions(), self.cfg.val_sessions)
+        train_idx, val_idx = session_split(
+            full.sessions(), self.cfg.val_sessions, self.cfg.val_fraction
+        )
         self.train_set = Subset(full, train_idx)
         self.val_set = Subset(full, val_idx)
 
@@ -67,7 +69,8 @@ class LibriBrainDataModule(L.LightningDataModule):
             f"({100 * len(full) / max(len(base.samples), 1):.1f}%)"
         )
         print(f"[data] sessions: {sorted(set(sessions))} | held out for val: {held}")
-        print(f"[data] train {len(train_idx)} | val {len(val_idx)}")
+        frac = len(val_idx) / max(len(train_idx) + len(val_idx), 1)
+        print(f"[data] train {len(train_idx)} | val {len(val_idx)} ({frac:.1%})")
         print(
             f"[data] classes present: train {n_train_classes}/{self.cfg.n_classes}, "
             f"val {len(val_classes)}/{self.cfg.n_classes}"
