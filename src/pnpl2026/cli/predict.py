@@ -19,7 +19,7 @@ import torch
 
 from pnpl.competition import LibriBrainCompetitionHoldout, write_submission
 
-from ..config import DATA_DIR, SUBMISSIONS_DIR, load_config
+from ..config import DATA_DIR, RUNS_DIR, SUBMISSIONS_DIR, load_config
 from ..lit import LitWordClassifier
 
 
@@ -36,10 +36,31 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def available_runs() -> str:
+    """Runs holding a checkpoint, for error messages."""
+    if not RUNS_DIR.exists():
+        return f"  (none -- {RUNS_DIR} does not exist)"
+    found = sorted(d.name for d in RUNS_DIR.iterdir() if (d / "best.ckpt").exists())
+    return "\n".join(f"  runs/{n}/best.ckpt" for n in found) or "  (no run has best.ckpt)"
+
+
 def main() -> None:
     args = parse_args()
     ckpt = Path(args.ckpt)
+    # Check the checkpoint before the config: a wrong run name otherwise
+    # surfaces as a confusing complaint about a missing config.yaml.
+    if not ckpt.exists():
+        raise SystemExit(
+            f"Checkpoint not found: {ckpt}\nAvailable:\n{available_runs()}"
+        )
+
     cfg_path = Path(args.config) if args.config else ckpt.parent / "config.yaml"
+    if not cfg_path.exists():
+        raise SystemExit(
+            f"Config not found: {cfg_path}\n"
+            "train.py writes config.yaml beside the checkpoint; pass --config "
+            "explicitly if this run predates that."
+        )
     cfg = load_config(cfg_path)
 
     SUBMISSIONS_DIR.mkdir(parents=True, exist_ok=True)
