@@ -79,6 +79,10 @@ def main() -> None:
         encoding="utf-8",
     )
 
+    # Monitored metric name follows metric_k so early stopping and
+    # checkpoint selection track the scored metric, not a proxy.
+    monitor = f"val/bacc{cfg.metric_k}"
+
     dm = LibriBrainDataModule(cfg)
     dm.setup()
     model = LitWordClassifier(cfg, class_weights=dm.class_weights)
@@ -93,7 +97,7 @@ def main() -> None:
             ModelCheckpoint(
                 dirpath=run_dir,
                 filename="best",
-                monitor="val/balanced_acc",
+                monitor=monitor,
                 mode="max",
                 save_last=True,
             ),
@@ -101,7 +105,7 @@ def main() -> None:
             # 8h walltime. Stop once the scored metric stops improving rather
             # than burning the budget on epochs that do not help.
             EarlyStopping(
-                monitor="val/balanced_acc",
+                monitor=monitor,
                 mode="max",
                 patience=cfg.patience,
                 verbose=True,

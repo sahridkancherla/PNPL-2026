@@ -7,6 +7,9 @@ sfreq: 250
 n_channels: 306
 n_classes: 50
 
+# BAcc@k is the scored metric; chance is k/n_classes (0.20 at k=10).
+metric_k: 10
+
 # Sessions held out for validation; empty = last session in sorted order.
 val_sessions: []
 

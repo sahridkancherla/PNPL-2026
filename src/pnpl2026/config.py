@@ -23,6 +23,7 @@ class Config:
     sfreq: int = 250
     n_channels: int = 306
     n_classes: int = 50
+    metric_k: int = 10
     val_sessions: list[str] = field(default_factory=list)
     val_fraction: float = 0.1
 

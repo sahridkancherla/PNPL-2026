@@ -1,8 +1,9 @@
 """LightningModule: loss, optimiser, and the scored metric.
 
-The competition scores *balanced accuracy* on argmax over the 50-word primary
-vocabulary. Plain accuracy is misleading on this label distribution -- balanced
-accuracy is the headline validation metric and nothing else is logged as one.
+Validation reports BAcc@k (see .metrics): macro-averaged Recall@k over the
+50-word vocabulary. Both BAcc@1 and BAcc@`metric_k` are logged, because chance
+is k/50 and reading a top-1 number against the top-10 floor of 0.20 makes a
+working model look broken.
 """
 
 from __future__ import annotations
@@ -10,9 +11,8 @@ from __future__ import annotations
 import lightning as L
 import torch
 import torch.nn.functional as F
-from sklearn.metrics import balanced_accuracy_score
-
 from .config import Config
+from .metrics import balanced_topk_accuracy
 from .models import build_model
 
 
@@ -35,7 +35,8 @@ class LitWordClassifier(L.LightningModule):
         if class_weights is None:
             class_weights = torch.ones(cfg.n_classes)
         self.register_buffer("class_weights", class_weights, persistent=False)
-        self._val_preds: list[torch.Tensor] = []
+        # Full logits, not argmax: top-k needs the ranking.
+        self._val_logits: list[torch.Tensor] = []
         self._val_targets: list[torch.Tensor] = []
 
     def forward(self, x):
@@ -52,21 +53,25 @@ class LitWordClassifier(L.LightningModule):
         logits = self(x)
         loss = F.cross_entropy(logits, y, weight=self.class_weights)
         self.log("val/loss", loss, prog_bar=True, on_epoch=True)
-        self._val_preds.append(logits.argmax(dim=1).detach().cpu())
+        self._val_logits.append(logits.detach().cpu())
         self._val_targets.append(y.detach().cpu())
         return loss
 
     def on_validation_epoch_end(self) -> None:
-        if not self._val_preds:
+        if not self._val_logits:
             return
-        preds = torch.cat(self._val_preds).numpy()
-        targets = torch.cat(self._val_targets).numpy()
+        logits = torch.cat(self._val_logits)
+        targets = torch.cat(self._val_targets)
+        n = self.cfg.n_classes
+        k = self.cfg.metric_k
+
+        self.log("val/bacc1", balanced_topk_accuracy(logits, targets, 1, n))
         self.log(
-            "val/balanced_acc",
-            float(balanced_accuracy_score(targets, preds)),
+            f"val/bacc{k}",
+            balanced_topk_accuracy(logits, targets, k, n),
             prog_bar=True,
         )
-        self._val_preds.clear()
+        self._val_logits.clear()
         self._val_targets.clear()
 
     def configure_optimizers(self):
