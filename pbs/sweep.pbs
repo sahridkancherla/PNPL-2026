@@ -14,6 +14,19 @@ set -euo pipefail
 cd "$HOME/PNPL-2026"
 source "$HOME/.local/bin/env"
 export PYTHONPATH="$PWD/src"
+export PYTHONUNBUFFERED=1
 
 CFG=$(sed -n "${PBS_ARRAY_INDEX}p" configs/sweep.txt)
-uv run python -m pnpl2026.cli.train --config configs/base.yaml "$CFG"
+if [ -z "$CFG" ]; then
+    echo "No config on line ${PBS_ARRAY_INDEX} of configs/sweep.txt" >&2
+    exit 1
+fi
+
+# PBS only copies its -o file back when the task exits; tee to RDS so each
+# array task can be tailed live:
+#     tail -f logs/<jobid>.<index>.live.log
+LIVE_LOG="logs/${PBS_JOBID%%.*}.${PBS_ARRAY_INDEX}.live.log"
+echo "task ${PBS_ARRAY_INDEX}: $CFG -> $LIVE_LOG"
+
+uv run python -m pnpl2026.cli.train \
+    --config configs/base.yaml "$CFG" --resume 2>&1 | tee "$LIVE_LOG"

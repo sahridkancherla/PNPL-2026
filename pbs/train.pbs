@@ -14,11 +14,18 @@ set -euo pipefail
 cd "$HOME/PNPL-2026"
 source "$HOME/.local/bin/env"
 export PYTHONPATH="$PWD/src"
-# Without this, stdout is block-buffered off a terminal, so `tail -f` on the
-# PBS log can lag well behind what the job is actually doing.
+# Without this, python block-buffers stdout when it is not a terminal.
 export PYTHONUNBUFFERED=1
+
+# PBS spools stdout on the compute node's local disk and only copies it to
+# logs/ when the job exits, so the -o file cannot be tailed while running.
+# tee to RDS instead -- this file updates live:
+#     tail -f logs/<jobid>.live.log
+LIVE_LOG="logs/${PBS_JOBID%%.*}.live.log"
+echo "live log: $LIVE_LOG"
 
 # --resume continues from last.ckpt, so a walltime kill just means
 # resubmitting this same script rather than starting over.
+# pipefail is set above, so a python failure still fails the job through tee.
 uv run python -m pnpl2026.cli.train \
-    --config configs/base.yaml configs/deep.yaml --resume
+    --config configs/base.yaml configs/deep.yaml --resume 2>&1 | tee "$LIVE_LOG"

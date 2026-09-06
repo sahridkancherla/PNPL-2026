@@ -13,10 +13,15 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 
 import lightning as L
 import yaml
-from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
+from lightning.pytorch.callbacks import (
+    EarlyStopping,
+    ModelCheckpoint,
+    TQDMProgressBar,
+)
 from lightning.pytorch.loggers import CSVLogger
 
 from ..config import RUNS_DIR, load_config
@@ -101,6 +106,10 @@ def main() -> None:
                 patience=cfg.patience,
                 verbose=True,
             ),
+            # Off a terminal tqdm cannot redraw in place, so every refresh is a
+            # new line -- 4380 of them per epoch in the job log. Throttle it
+            # when output is redirected, keep it responsive interactively.
+            TQDMProgressBar(refresh_rate=1 if sys.stdout.isatty() else 200),
         ],
     )
 
