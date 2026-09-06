@@ -9,6 +9,16 @@ validation then reads far above the leaderboard. Split by whole session.
 from __future__ import annotations
 
 
+def _natural(session: str):
+    """Sort key ordering numeric session ids numerically.
+
+    LibriBrain session ids are numeric strings, so plain lexicographic order
+    runs 0, 1, 10, 11, ... 2, 20 -- making "the last session" mean '9' rather
+    than '28'. Fall back to string order for non-numeric ids.
+    """
+    return (0, int(session)) if session.isdigit() else (1, session)
+
+
 def session_split(
     sessions: list[str], val_sessions: list[str] | None = None
 ) -> tuple[list[int], list[int]]:
@@ -18,7 +28,7 @@ def session_split(
     last session in sorted order is used, which keeps the split
     deterministic without needing the config to know session names.
     """
-    unique = sorted(set(sessions))
+    unique = sorted(set(sessions), key=_natural)
     if len(unique) < 2:
         raise ValueError(
             f"Need >=2 sessions to split, found {unique!r}. "

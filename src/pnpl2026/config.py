@@ -34,6 +34,7 @@ class Config:
     weight_decay: float = 0.0
     batch_size: int = 64
     max_epochs: int = 50
+    patience: int = 5
     num_workers: int = 4
     seed: int = 0
 

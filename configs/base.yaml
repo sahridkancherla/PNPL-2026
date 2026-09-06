@@ -16,6 +16,7 @@ model_kwargs: {}
 lr: 0.001
 weight_decay: 0.0
 batch_size: 64
-max_epochs: 50
-num_workers: 4
+max_epochs: 50   # early stopping ends the run before this in practice
+patience: 5
+num_workers: 8   # match ncpus in the PBS script; loader is the bottleneck
 seed: 0

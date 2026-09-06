@@ -81,6 +81,13 @@ class LibriBrainDataModule(L.LightningDataModule):
             )
 
     def _loader(self, dataset, shuffle: bool) -> DataLoader:
+        # Each __getitem__ reads a window out of HDF5 on RDS, so the loader is
+        # I/O bound and the GPU sits idle waiting on it. persistent_workers
+        # keeps the pool alive between epochs instead of re-spawning (and
+        # re-opening every file handle) 50 times.
+        extra = {}
+        if self.cfg.num_workers > 0:
+            extra = {"persistent_workers": True, "prefetch_factor": 4}
         return DataLoader(
             dataset,
             batch_size=self.cfg.batch_size,
@@ -88,6 +95,7 @@ class LibriBrainDataModule(L.LightningDataModule):
             num_workers=self.cfg.num_workers,
             pin_memory=torch.cuda.is_available(),
             drop_last=False,
+            **extra,
         )
 
     def train_dataloader(self) -> DataLoader:

@@ -15,4 +15,7 @@ cd "$HOME/PNPL-2026"
 source "$HOME/.local/bin/env"
 export PYTHONPATH="$PWD/src"
 
-uv run python -m pnpl2026.cli.train --config configs/base.yaml configs/deep.yaml
+# --resume continues from last.ckpt, so a walltime kill just means
+# resubmitting this same script rather than starting over.
+uv run python -m pnpl2026.cli.train \
+    --config configs/base.yaml configs/deep.yaml --resume

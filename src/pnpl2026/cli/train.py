@@ -16,7 +16,7 @@ import subprocess
 
 import lightning as L
 import yaml
-from lightning.pytorch.callbacks import ModelCheckpoint
+from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from lightning.pytorch.loggers import CSVLogger
 
 from ..config import RUNS_DIR, load_config
@@ -38,6 +38,11 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument("--config", nargs="+", required=True)
     p.add_argument(
+        "--resume",
+        action="store_true",
+        help="Continue from last.ckpt in the run directory (after a walltime kill).",
+    )
+    p.add_argument(
         "--force",
         action="store_true",
         help="Overwrite an existing run directory that already holds results.",
@@ -55,7 +60,7 @@ def main() -> None:
     # the record of an earlier score is worse than an early exit, so make the
     # overwrite explicit.
     existing = list(run_dir.glob("*.ckpt")) + list(run_dir.glob("metrics.csv"))
-    if existing and not args.force:
+    if existing and not args.force and not args.resume:
         raise SystemExit(
             f"{run_dir} already holds results ({len(existing)} file(s)). "
             f"Change run_name in your config, or pass --force to overwrite."
@@ -79,17 +84,31 @@ def main() -> None:
         logger=CSVLogger(save_dir=run_dir, name="", version=""),
         callbacks=[
             # Checkpoint every epoch: a walltime kill with no checkpoint loses
-            # the whole job.
+            # the whole job. last.ckpt is what --resume picks up.
             ModelCheckpoint(
                 dirpath=run_dir,
                 filename="best",
                 monitor="val/balanced_acc",
                 mode="max",
                 save_last=True,
-            )
+            ),
+            # An epoch costs ~26 min, so max_epochs=50 cannot finish inside an
+            # 8h walltime. Stop once the scored metric stops improving rather
+            # than burning the budget on epochs that do not help.
+            EarlyStopping(
+                monitor="val/balanced_acc",
+                mode="max",
+                patience=cfg.patience,
+                verbose=True,
+            ),
         ],
     )
-    trainer.fit(model, datamodule=dm)
+
+    last = run_dir / "last.ckpt"
+    ckpt_path = str(last) if args.resume and last.exists() else None
+    if args.resume and ckpt_path is None:
+        print(f"[train] --resume given but {last} not found; starting fresh")
+    trainer.fit(model, datamodule=dm, ckpt_path=ckpt_path)
     print(f"run complete -> {run_dir}")
 
 
