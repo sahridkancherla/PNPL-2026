@@ -13,7 +13,8 @@ Keep this file current. A stale map is worse than none.
 |---|---|
 | `README.md` | front door for humans. Short; points inward. |
 | `REPO.md` | this file — the map. |
-| `CLAUDE.md` | the working rules — task, constraints, discipline. No content, no navigation. |
+| `CLAUDE.md` | the goal and the working rules. No content, no navigation. |
+| `FORMAT.md` | the competition: metric, data, label space, submission, HPC access. |
 | `LICENSE` | MIT. |
 | `.claude/` | Claude's configuration — rules, skills, settings. |
 | `handoff-docs/` | one document per feature, updated in place. Current state, not history. |

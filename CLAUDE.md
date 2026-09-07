@@ -2,8 +2,10 @@
 
 **What this project is trying to do, and the rules for doing it.**
 
-The repo map is `REPO.md` — where things live is recorded there, not here.
-Findings, measurements and per-feature state go in `handoff-docs/`.
+- The repo map is `REPO.md`.
+- The competition, the data, the label space and HPC access are `FORMAT.md`.
+  **Do not restate any of it here.**
+- Findings, measurements and per-feature state go in `handoff-docs/`.
 
 ---
 
@@ -15,16 +17,14 @@ Classify a **single word** from a **single trial**, over a fixed 50-word
 vocabulary. Single-trial is the whole difficulty: there is no trial averaging
 to lean on, so every window must carry its own evidence.
 
-- **Metric: BAcc@10** — macro-averaged Recall@10 over the classes present.
-- **Chance is 20%** (`metric_k / n_classes`), not 2%.
-- Submission is a CSV written by `pnpl`'s `write_submission`, in the row order
-  `LibriBrainCompetitionHoldout` yields.
+- **Metric: BAcc@10.** **Chance is 20%**, not 2%.
+- Windows are `(306, 250)`; the label space is the 50 primary-vocabulary words.
 
-The immediate aim is a pipeline that trains end to end on the HPC and produces
-a valid submission, so that model choices can be measured rather than argued
-about. `cnn_baseline` is the reference point, not the destination — it exists
-to establish what a plain convnet gets, and anything new is judged against it
-on the same session split.
+The immediate aim is a pipeline that trains end to end and produces a valid
+submission, so that model choices can be measured rather than argued about.
+`cnn_baseline` is the reference point, not the destination — it exists to
+establish what a plain convnet gets, and anything new is judged against it on
+the same session split.
 
 ---
 
@@ -32,14 +32,33 @@ on the same session split.
 
 - **BAcc@10 is the scored metric.** BAcc@1 is logged as a tiebreaker only. A
   BAcc@1 of 0.05 is not "broken"; read every number against the right floor.
+- **Targets come from `vocab.to_id()`, never from `task.label_info`.** The
+  task's numbering is alphabetical over thousands of words; the competition's
+  is frequency-ordered over 50. Mixing them scores at chance and raises
+  nothing. `FORMAT.md` §3 has the detail.
+- **Never reorder holdout predictions.** `iter_windows()` yields the canonical
+  row order. Sorting or shuffling breaks alignment with no error.
 - **PyYAML implements YAML 1.1**: `lr: 1e-5` loads as the *string* `"1e-5"`.
   `config._coerce` catches it, but write `1.0e-5` in YAML regardless.
 - **`/data/` in `.gitignore` must keep its leading slash.** Unanchored `data/`
   also matches `src/pnpl2026/data/` and silently drops the package from git.
   This has already happened once.
-- **Never reorder holdout predictions.** `iter_windows()` yields the canonical
-  row order and the host builds its label CSV from the same iteration. Sorting
-  or shuffling breaks alignment with no error and no warning.
+
+## Adding a model
+
+Every new model idea, start to finish:
+
+1. **Write it.** A new file in `src/pnpl2026/models/`, a plain `nn.Module`
+   taking `n_channels` and `n_classes`, mapping `(B, 306, 250)` → `(B, 50)`.
+2. **Register it.** One line in `models/__init__.py`:
+   `REGISTRY = {"cnn_baseline": SimpleWordCNN, "my_model": MyModel}`
+3. **Write a config.** `configs/my_model.yaml`, containing **only the lines
+   that differ** from `base.yaml` — `model`, `run_name`, and whatever
+   hyperparameters the idea actually changes.
+
+Run it against the same session split as the baseline, or the comparison means
+nothing. **Run the `shape-check` skill before the first training run** of any
+new model — a silent shape bug trains happily to exactly chance.
 
 ## Data and storage
 
@@ -47,31 +66,25 @@ on the same session split.
   `data/`, `runs/`, `logs/`, `submissions/`, all gitignored.
 - **Never hard-code an absolute path**, in code or in prose. Paths derive from
   `REPO_ROOT` in `config.py`; one machine's path is broken on the next.
-- `cli.prepare` downloads the cache and **must run on a login node** — HPC
-  compute nodes have no outbound internet.
+- `cli.prepare` downloads the cache and **must run where there is outbound
+  internet** — see `FORMAT.md` §5 for why that matters on the cluster.
 
-## Compute — a hard constraint, not a courtesy
+## Compute
 
-Calibrated for the Imperial CX3 job class currently requested in `pbs/`.
-Recalibrate the numbers for other hardware; the principles hold.
+> ⚠️ **Do not use the HPC unless explicitly told to.** No `ssh`, no `qsub`, no
+> `scp`, no starting a job on your own initiative. Shared allocation, real
+> queue, other people's time. `FORMAT.md` §5 is reference for when the
+> instruction comes.
 
-- **Verify `gpu_type` and the cpus/mem/walltime combination against Imperial's
-  current job-sizing table before submitting.** CX3 rejects or indefinitely
-  queues jobs that match no allowed job class.
-- **`num_workers` must match `ncpus` in the PBS script.** The loader is the
-  bottleneck; a mismatch wastes the allocation.
-- **Walltime is a kill, not a failure.** `train.pbs` passes `--resume`, so an
-  overrun means resubmitting the same script, not starting over.
-- **PBS only copies its `-o` file back when the job exits.** To watch a running
-  job, tail the live log the script tees into `logs/`.
-- **State expected duration and load before launching anything long.**
+- **State expected duration and load before launching anything long**, wherever
+  it runs.
+- **Never run two compute-heavy jobs concurrently** on the same machine.
+- Job sizing, walltime and log-tailing on the cluster: `FORMAT.md` §5.
 
 ## Experimental discipline
 
-- **Split by whole session, never randomly.** Neighbouring windows from one
-  session landing in both halves makes validation read far above the
-  leaderboard. Session sizes vary ~30x, so size the split by *fraction of
-  samples*, not session count.
+- **Split by whole session, never randomly**, and size the split by *fraction
+  of samples*, not session count.
 - **Log training metrics alongside validation metrics.** Without the gap you
   cannot tell underfitting from overfitting, and so cannot choose between
   adding capacity and adding regularisation.
