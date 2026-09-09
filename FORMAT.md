@@ -23,6 +23,25 @@ Nothing in this file should be restated elsewhere. Link to it instead.
 `T = (tmax - tmin) * sfreq`. All four numbers live in `Config`, so read them
 from the config rather than hard-coding 250.
 
+## Scale — measured, 2026-09-09
+
+Counted directly from the 162 event tables, matched against the 50-word
+vocabulary in `cache/v2/meta.npz`. Re-measure if the partition changes.
+
+| | |
+|---|---|
+| Word events, all tasks | 780,277 |
+| **In-vocabulary windows (`N`)** | **313,068** — 40.1% of all words |
+| Recordings | 162, over 12 tasks — **`sub-0` only**, every file |
+| Classes present | 50 / 50 |
+| Median class | 3,482 |
+| **Class imbalance** | **121x** |
+
+⚠️ The vocabulary is **not** the corpus top-50. `people`, `new`, `really`,
+`always`, `think`, `good` and `time` do not crack the frequency top-50 — they
+come from TheMoth and TIMIT. That is good for decodability (content words carry
+more signal than function words) and bad for sampling (see below).
+
 ## Why this is hard
 
 **Single trial.** The 2025 phoneme competition allowed averaging many
@@ -79,6 +98,28 @@ internet, so a job that tries to download will hang or fail rather than fetch.
 The cache lands in `data/` at the repo root — derived from `REPO_ROOT` in
 `config.py`, gitignored via the **anchored** `/data/` pattern.
 
+## On-disk layout
+
+Each task folder holds two directories of 1 file per recording:
+
+```
+<task>/derivatives/events/sub-0_ses-<n>_task-<task>_run-<r>_events.tsv
+<task>/derivatives/serialised/sub-0_ses-<n>_task-<task>_run-<r>_proc-<chain>_meg.h5
+```
+
+The processing chain is baked into the filename:
+`bads+headpos+sss+notch+bp+ds` — bad-channel repair, head-position correction,
+**SSS**, notch, bandpass, downsample. The `sss` term is the one with
+consequences — see *The input is rank 73* below.
+
+`.h5` holds **continuous** MEG, one `(306, T_run)` array per recording — not
+epochs. Windows are cut at training time from the event tables.
+
+⚠️ The dataset currently lives on an external volume, and **that path must never
+appear in code or config.** It is not mounted on the cluster, not mounted on a
+collaborator's machine, and not guaranteed to be mounted here. `config.py`
+resolves `data/` from `REPO_ROOT`; keep it that way.
+
 ## Run keys and sample tuples
 
 A run is identified by a 4-tuple `(subject, session, task, run)`, e.g.
@@ -109,6 +150,80 @@ Sessions vary in size by roughly **30x**. Two consequences:
 `src/pnpl2026/data/splits.py` does this, and sorts session ids *numerically* —
 plain string order runs `0, 1, 10, 11, … 2, 20`, which makes "the last session"
 mean `9` rather than `28`.
+
+## Sample rate and window bounds
+
+Windows arrive at **250 Hz**. The signal is bandpassed upstream (`bp` in the
+processing chain), and an earlier pipeline decimated to **125 Hz** (`decim: 2`)
+and kept it — so half the native rate is known to be enough, not a guess.
+Confirm against the PSD before relying on it.
+
+That pipeline also cut a **wider window than this repo does**: `tmin = -0.32`,
+`tmax = 1.28`, 200 samples at 125 Hz, with the `[0, 1] s` core at samples
+40-165. The 40 pre-onset samples are the margin that makes **time-jitter
+augmentation possible at all** — at this repo's `0.0` to `1.0` there is nothing
+to jitter into.
+
+## The input is rank 73, not 306
+
+**The single most consequential fact about this data.** SSS (Signal Space
+Separation) projects the sensor array onto a basis of internal-source
+harmonics and discards the rest, so the 306 sensors span far fewer than 306
+dimensions. Measured from the noise-covariance eigenspectrum in
+`cache/v2/meta.npz`:
+
+```
+eig[  0] = 1.46e+01     cumulative variance   15.40%
+eig[ 29] = 3.72e-01                           94.52%
+eig[ 71] = 2.01e-02                           99.89%
+eig[ 73] = 1.26e-02                           99.92%   <- rank cut taken here
+eig[ 99] = 8.45e-05                           99.999%  <- 135x cliff
+eig[149] = 4.64e-07                          100.000%  <- numerical zero
+```
+
+**Effective rank is 73.** Everything past it is linear combinations of the
+rest, and any layer given more than 73 output dimensions at the sensor
+boundary is free to amplify numerical noise in directions that carry nothing.
+
+Consequences:
+
+- **Whiten to ~73 components at the data boundary**, not inside the model. A
+  `(73, 306)` whitener plus per-channel `mean`/`std` is the natural stem.
+- **Re-derive the whitener from the training split.** Whitening is
+  unsupervised so leakage is mild, but there is no reason to inherit another
+  split's statistics.
+- After whitening, **channel-wise reasoning about magnetometers vs
+  gradiometers no longer applies** — the whitener mixes them.
+- Storage falls out of it: `313k x 73 x 200` fp16 is **9.1 GB** and fits in
+  RAM, against **47.9 GB** for `313k x 306 x 250`. That is the difference
+  between an I/O-bound and a compute-bound training loop.
+
+## Class imbalance and the validation noise floor
+
+The 50 classes span **121x**:
+
+| | n |
+|---|---|
+| `the` | 41,143 |
+| `and` | 21,439 |
+| *median class* | 3,482 |
+| `it's` | 698 |
+| `really` | 467 |
+| `always` | 406 |
+| `new` | 371 |
+| **`people`** | **341** |
+
+⚠️ **Full inverse-frequency class weights span the same 121x**, which makes the
+batch gradient depend on which rare tokens happen to land in it. Prefer
+**square-root inverse frequency** (ratio ~11x), a weight cap, or a per-class
+sample cap — the earlier pipeline capped at 3,500/class.
+
+⚠️ **The rare classes set the validation noise floor.** `people` is spread over
+126 of 162 recordings, so no session holdout isolates it cleanly. A 10% holdout
+leaves it ~34 validation examples; per-class recall at n=34 has **SE ~8.6
+points**, and BAcc averages 50 such estimates. **Size the validation split by
+the rarest class, not by overall sample count**, and treat small BAcc
+differences as noise.
 
 ## Event files
 
