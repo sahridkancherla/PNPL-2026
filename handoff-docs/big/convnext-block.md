@@ -45,7 +45,8 @@ plausibility check, not ground truth.
 | **FIR zero-phase** anti-alias before decimating | 9.97% of power is above the new Nyquist | `scipy.signal.decimate` default (`ftype="iir"`) | frequency-dependent phase delay smears latency, which is the signal |
 | | | naive `x[..., ::2]` | aliases 10% of power into the band |
 | **sqrt** inverse-frequency class weights | full inverse frequency spans 121x, making the batch gradient depend on which rare tokens land in it | current full inverse frequency | almost certainly the cause of the `1e-3 -> 1e-4 -> 1e-6 -> 1e-5` walk in the git log |
-| Window **-0.32..1.28 s**, train on a 160-sample crop | the 40 pre-onset samples are the only thing that makes time jitter possible | the repo's current `0.0..1.0` | no margin to jitter into |
+| Store **-0.32..1.28 s** (200 samples), model takes the **125-sample [0,1]s core** | the holdout fixes the input length -- `predict.py` feeds `iter_windows()` straight to the model; the surrounding 75 samples are jitter budget only | the repo's current `0.0..1.0` as the *stored* window | no margin to jitter into |
+| Jitter **+/-10 samples (+/-80 ms)**, crop offset 30..50, test at 40 | covers forced-alignment error plus trial-to-trial latency variation | +/-40 samples, the full margin | 320 ms moves a neighbouring word into the window centre -- words arrive ~400 ms apart |
 | **Time jitter from day one**; other augmentation gated on the measured train/val gap | onset annotation has error and response latency varies trial to trial — jitter corrects a real mislabelling, not a hypothetical | full augmentation stack up front | `N=313k` is not scarce; unmeasured regularisation can mask underfitting |
 | 4 branches, concat, 1x1 mixer | it is a **rank-3 factorisation of a dense k=25 conv** — 103k params where dense is 1.0M | splitting channels into 4 groups | drops the temporal basis to rank 1 per channel; 4x cheaper and meaningfully weaker |
 | Dilation ramp **(1, 2, 4, 8)** across blocks | reaches full-window RF by block 4 without gridding | fixed `d=4` | dilated taps alias above ~31 Hz; the ramp plus the dense k=3/k=9 branches fill the gaps |
@@ -76,6 +77,10 @@ plausibility check, not ground truth.
 - **`n_components`: 73, 50 or 30?** Components 30-73 hold ~5% of variance, and
   whitening promotes them to equal footing. Low variance is not low
   discriminability, but it is not high either. Resolved by a 3-point sweep.
+- **What length does `iter_windows()` actually yield?** Inferred as 125 samples
+  (`[0,1]s` at 125 Hz) from the repo's `Config` defaults, but unverified --
+  `pnpl` is not installed locally. It fixes the model's input length, so
+  confirm before building the cache.
 - **FFN expansion 2 or 4?** At `N=313k`, 4 is affordable. Second knob.
 - **Was `cache/v2` anti-aliased?** Resolved by rebuilding a shard and
   comparing; a mismatch concentrated above 30 Hz would say no.
