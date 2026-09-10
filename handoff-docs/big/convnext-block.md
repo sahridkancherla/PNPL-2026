@@ -61,6 +61,14 @@ plausibility check, not ground truth.
 - Storage: `313k x 73 x 200` fp16 = **9.1 GB**, against 47.9 GB raw. Fits the
   64 GB the PBS scripts already request.
 
+## To revisit before implementing
+
+- **Step 1, the robust per-channel standardisation, is not yet clear to Kamil**
+  (noted 2026-09-10). The whitening maths — covariance, eigendecomposition,
+  `Lambda^-1/2`, the rank cut — landed. The median/IQR centre-and-scale did
+  not. Re-explain before the cache builder is written, since a
+  misunderstanding there silently corrupts everything downstream.
+
 ## Open questions
 
 - **How much augmentation is actually needed?** Resolved by the train/val gap
