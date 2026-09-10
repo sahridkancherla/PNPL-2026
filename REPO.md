@@ -18,7 +18,7 @@ Keep this file current. A stale map is worse than none.
 | `LICENSE` | MIT. |
 | `.claude/` | Claude's configuration — rules, skills, settings. |
 | `handoff-docs/` | one document per feature, updated in place. Current state, not history. |
-| `src/pnpl2026/` | the package: config, data, models, training, metrics, CLI. |
+| `src/pnpl2026/` | the package. Shared machinery at its root; one subpackage per trial. |
 | `configs/` | YAML run configs. `base.yaml` is defaults; a second file overrides it. |
 | `pbs/` | PBS job scripts for the Imperial HPC. `train.pbs`, `sweep.pbs`. |
 | `runs/` | checkpoints and per-run logs. Gitignored except `.gitkeep`. |
@@ -34,6 +34,17 @@ Keep this file current. A stale map is worse than none.
 Two folders, split by feature size. A feature spanning many days or sessions
 goes in `big/`; one that finishes inside a single session goes in `small/`.
 `small/` should be much the rarer of the two.
+
+## Trials
+
+`src/pnpl2026/trial1/`, `trial2/`, … — one subpackage per complete attempt,
+each with its own `data/`, `models/` and `cli/`. **Trials do not import from
+one another**; code is copied rather than shared, so a finished trial stays
+reproducible when the next changes the window, the rank or the sample rate.
+
+Shared, trial-independent machinery — `metrics.py`, `config.py`, `data/vocab.py`
+— stays at the package root. The folder name is `trial1`, not `trial-1`: a
+hyphen is not importable.
 
 ## Not created yet
 
