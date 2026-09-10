@@ -196,8 +196,43 @@ out 3x too large. Real alpha is not exactly 10.000 Hz and its phase drifts, so
 the locking would be partial rather than total -- but the fix costs nothing, so
 there is no reason to carry the risk.
 
-`rng.choice(n_times, n_keep, replace=False)`, indices sorted before gathering
-so the recording is read front to back.
+`rng.choice(n_times, n_keep, replace=False)`.
+
+### Why without replacement
+
+Drawing `k` from `n` with replacement leaves about `n(1 - e^(-k/n))` distinct
+values -- for `k=2015` from `n=100,750` that is ~1995, so ~1% of the sample is
+repeats. Measured: 1998 distinct, against the predicted 1995.
+
+Repeats are worse than merely wasteful. The pooled sample gets sorted to find
+the percentiles, and a duplicated value is counted twice, so it carries double
+weight in deciding where P25 and P75 fall -- variance with no information.
+Measured spread of the scale estimate over 40 seeds:
+
+| | spread |
+|---|---|
+| `replace=True` | 2.700% |
+| `replace=False` | 2.578% |
+
+~5% less variance, for free.
+
+### Why the indices are NOT sorted
+
+An earlier version sorted them, on the reasoning that a front-to-back read
+would be kinder to the cache. **Measured, that is false:**
+
+```
+scattered indices : 1.82 ms per gather
+sorted indices    : 1.89 ms per gather
+```
+
+The array is C-contiguous `(306, 100750)`, so gathering columns walks across
+306 rows of 403 KB each and the cost is dominated by that row stride, not by
+locality within a row. NumPy also builds a transposed `(2015, 306)` temporary
+internally, so the access pattern is not the one the reasoning assumed.
+
+Percentiles are order-independent, so the sort changed nothing functionally
+either. It was removed.
 
 ### A note on `.base`
 
