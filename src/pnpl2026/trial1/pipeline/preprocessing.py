@@ -7,7 +7,10 @@ one thing holding out whole sessions is meant to measure.
 
 Transforms here operate on continuous `[n_channels, n_times]` recordings, not
 on cut windows -- filtering and covariance estimation both need the unbroken
-stream. Window-level transforms live in `transforms.py`.
+stream. Per-window and per-batch transforms (cropping, augmentation) happen
+later, on the GPU, and do not belong here.
+
+The maths behind each choice is recorded in `info/maths/`.
 """
 
 from __future__ import annotations
@@ -75,7 +78,10 @@ class ChannelStandardiser:
             raise ValueError(f"subsample must be >= 1, got {subsample}")
 
         # Thin each recording as it arrives rather than holding all of them.
-        thinned = [recording[:, ::subsample] for recording in recordings]
+        # The .copy() is load-bearing: strided slicing returns a VIEW that
+        # keeps its whole parent recording alive, so without it a generator of
+        # 130 recordings holds ~16 GB here instead of ~320 MB.
+        thinned = [recording[:, ::subsample].copy() for recording in recordings]
         if not thinned:
             raise ValueError("No recordings were given to fit on.")
 
@@ -85,6 +91,15 @@ class ChannelStandardiser:
         centre = np.median(pooled, axis=1)
         upper, lower = np.percentile(pooled, [75, 25], axis=1)
         scale = (upper - lower) / NORMAL_IQR
+
+        # NaN slips silently through every comparison below, and no choice of
+        # centre or scale repairs a channel whose samples are already NaN.
+        if not (np.isfinite(centre).all() and np.isfinite(scale).all()):
+            raise ValueError(
+                "Non-finite centre or scale: channel(s) "
+                f"{np.flatnonzero(~np.isfinite(centre) | ~np.isfinite(scale)).tolist()} "
+                "contain NaN or inf. Fix the recording, not the statistic."
+            )
 
         # A channel with no spread would divide by zero. Upstream bad-channel
         # repair should prevent this, so it means something is wrong: pass the

@@ -38,7 +38,7 @@ goes in `big/`; one that finishes inside a single session goes in `small/`.
 ## Trials
 
 `src/pnpl2026/trial1/`, `trial2/`, … — one subpackage per complete attempt,
-each with its own `data/`, `models/` and `cli/`. **Trials do not import from
+each with its own `pipeline/`, `models/` and `cli/`. **Trials do not import from
 one another**; code is copied rather than shared, so a finished trial stays
 reproducible when the next changes the window, the rank or the sample rate.
 
