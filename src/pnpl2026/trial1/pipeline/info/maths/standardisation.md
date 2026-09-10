@@ -125,6 +125,20 @@ The leak is mild, since no label is involved, but it is free to avoid.
 
 ## Practical: why the fit subsamples
 
+**Because percentiles cannot be computed incrementally, and means can.**
+
+| statistic | running state needed | memory |
+|---|---|---|
+| mean | a sum and a count | 2 numbers |
+| covariance | a running `X X^T` | 749 KB, whatever `T` is |
+| **median / percentile** | **every value, in order to sort** | **O(T) -- 16 GB** |
+
+To know the median you must know which value is in the middle after sorting,
+and you cannot know that until you have seen all of them. There is no small
+running summary. This is exactly why `ChannelStandardiser.fit` subsamples and
+`Whitener.fit` does not need to.
+
+
 Percentiles need the **values**, not running sums, so a thinned copy is held in
 memory. Over ~130 decimated training recordings (100,750 samples each):
 
@@ -138,10 +152,66 @@ memory. Over ~130 decimated training recordings (100,750 samples each):
 Default is 50. A standard error near `1e-3` on a percentile is far below
 anything that affects a scale estimate.
 
-⚠️ **Thinning must `.copy()`.** `recording[:, ::50]` is a strided **view** that
-keeps its whole parent alive through `.base`. Over 130 recordings that is
-16.0 GB resident instead of 321 MB -- and it only bites when the caller passes
-a generator, which is exactly how the cache builder calls it.
+### Measured cost of thinning
+
+13,097,500 i.i.d. samples, five seeds each:
+
+| subsample | kept | scale | spread |
+|---|---|---|---|
+| 1 | 13,097,500 | 0.99977 | 0.019% |
+| 10 | 1,309,750 | 0.99909 | 0.109% |
+| **50** | **261,950** | **0.99844** | **0.151%** |
+| 100 | 130,975 | 0.99905 | 0.200% |
+| 500 | 26,195 | 1.00273 | 0.957% |
+
+No bias, only a slowly growing sampling error. 262k samples is far more than a
+percentile needs; the other 12.8 million buy a third decimal place.
+
+---
+
+## ⚠️ Why the draw is RANDOM, not every nth
+
+The table above assumes **independent** samples. MEG is not independent -- it
+oscillates -- and `[:, ::50]` on 125 Hz data is a **2.5 Hz sampler**.
+
+Any component at a multiple of 2.5 Hz then lands on the *same phase* every
+time. Alpha, the largest rhythm in MEG, sits at ~10 Hz, and `10 / 2.5 = 4`
+exactly.
+
+Measured on noise plus a strong 10 Hz sinusoid:
+
+| | scale | error |
+|---|---|---|
+| all samples (the truth) | 2.9106 | -- |
+| every 50th, strided | 0.9399 | **-67.7%** |
+| 262k random timepoints | 2.9739 | +2.2% |
+
+```
+sampled phases (first 6, radians): [0. 0. 0. 0. 0. 0.]
+distinct phases across all 1000 strided samples: 2
+```
+
+**A 68% underestimate of the scale**, and everything divided by it would come
+out 3x too large. Real alpha is not exactly 10.000 Hz and its phase drifts, so
+the locking would be partial rather than total -- but the fix costs nothing, so
+there is no reason to carry the risk.
+
+`rng.choice(n_times, n_keep, replace=False)`, indices sorted before gathering
+so the recording is read front to back.
+
+### A note on `.base`
+
+Fancy indexing also removes the view-retention footgun that strided slicing
+carried, but **not** in the way a `.base is None` check would suggest:
+
+| | own size | `.base` | pins the 123 MB parent? |
+|---|---|---|---|
+| `[:, ::50]` | 2.47 MB | the parent, 123 MB | **yes** |
+| `[:, keep]` | 2.47 MB | a `(2015, 306)` temporary, 2.47 MB | no |
+
+Advanced indexing on axis 1 builds a transposed temporary and returns a view
+of *that*, so `.base` is not `None` -- but it is the same size as the result,
+and the recording is released. Do not "fix" this by adding a `.copy()`.
 
 ---
 

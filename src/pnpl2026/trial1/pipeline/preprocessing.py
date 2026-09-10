@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import Self
 
 import numpy as np
 
@@ -48,9 +49,12 @@ class ChannelStandardiser:
     @classmethod
     def fit(
         cls,
+
+        #iterate through every recording
         recordings: Iterable[np.ndarray],
         subsample: int = 50,
-    ) -> "ChannelStandardiser":
+        seed: int = 0,
+    ) -> Self:
         """Fit a centre and scale per channel over the training recordings.
 
         Median and IQR rather than mean and standard deviation: MEG retains
@@ -60,16 +64,24 @@ class ChannelStandardiser:
         so an artifact would end up setting the scale meant to remove it. The
         median moves by at most one rank position however extreme the outlier.
 
-        Percentiles need the values themselves rather than running sums, so a
-        thinned copy is held in memory. Every 50th timepoint of ~130 decimated
-        recordings is ~262k samples for ~320 MB, and puts the percentile
-        standard error near 1e-3 -- far below anything that matters here.
+        A mean streams in two numbers and a covariance streams in a fixed
+        matrix, but a percentile needs every value at once in order to sort
+        them, so the fit holds a thinned copy instead. Keeping one timepoint in
+        50 leaves ~262k samples for ~320 MB and costs ~0.15% on the estimate,
+        against 16 GB to keep all of them.
+
+        Timepoints are drawn at RANDOM, not every nth. Strided sampling of a
+        125 Hz recording at every 50th is a 2.5 Hz sampler, so any component at
+        a multiple of 2.5 Hz lands on the same phase every time -- alpha at
+        10 Hz above all. Measured on a synthetic 10 Hz oscillation, strided
+        sampling underestimated the scale by 68% where random was within 2%.
 
         ARGS:
-            recordings: iterable of [n_channels, n_times] arrays, already
-                decimated. Consumed once, so pass a fresh iterable per call.
-            subsample (int): keep every nth timepoint when estimating
-                percentiles. 1 uses every sample and needs ~16 GB.
+            recordings: iterable of [n_channel, times] arrays.
+            subsample (int): keep one timepoint in this many. 1 keeps all
+                of them and needs ~16 GB.
+            seed (int): seed for the timepoint draw, so a rebuilt cache is
+                reproducible.
 
         RETURNS:
             a fitted ChannelStandardiser
@@ -78,15 +90,33 @@ class ChannelStandardiser:
             raise ValueError(f"subsample must be >= 1, got {subsample}")
 
         # Thin each recording as it arrives rather than holding all of them.
-        # The .copy() is load-bearing: strided slicing returns a VIEW that
-        # keeps its whole parent recording alive, so without it a generator of
-        # 130 recordings holds ~16 GB here instead of ~320 MB.
-        thinned = [recording[:, ::subsample].copy() for recording in recordings]
+        rng = np.random.default_rng(seed)
+        thinned = []
+        for recording in recordings:
+            n_times = recording.shape[1]
+            # At least one timepoint even from a recording shorter than the
+            # subsample factor, so a short session is thinned and not lost.
+            n_keep = max(1, n_times // subsample)
+            keep = rng.choice(n_times, size=n_keep, replace=False)
+            # Sorted indices read the recording front to back, which is much
+            # kinder to the cache than gathering in scattered order.
+            keep.sort()
+            # Fancy indexing returns a copy, so nothing pins the parent array
+            # alive -- a strided view would have kept all 16 GB resident.
+            thinned.append(recording[:, keep])
         if not thinned:
             raise ValueError("No recordings were given to fit on.")
 
         # [n_channels, n_kept] -- one pooled cloud over every training session.
         pooled = np.concatenate(thinned, axis=1)
+
+        # A single surviving timepoint gives an IQR of exactly zero, which the
+        # flat-channel guard below would misreport as a dead sensor.
+        if pooled.shape[1] < 2:
+            raise ValueError(
+                f"Only {pooled.shape[1]} timepoint(s) survived subsample="
+                f"{subsample}; an IQR needs at least two. Lower subsample."
+            )
 
         centre = np.median(pooled, axis=1)
         upper, lower = np.percentile(pooled, [75, 25], axis=1)
