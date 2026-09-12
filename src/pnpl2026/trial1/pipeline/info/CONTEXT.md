@@ -7,7 +7,9 @@ Every transform here is fitted on **training recordings only**.
 
 | where | what |
 |---|---|
+| `../decimation.py` | 250 -> 125 Hz: `design_antialias_filter`, `decimate_recording`. Nothing fitted |
 | `../preprocessing.py` | fitted transforms: `ChannelStandardiser`, `Whitener` |
+| `maths/decimation.md` | why naive striding puts the alias at **parity** with the signal, why scipy's default filter is too weak, and the 56.25-62.5 Hz band given up to buy -80 dB |
 | `maths/standardisation.md` | ⚠️ **opens with a TEMPORARY notice** -- the fitted scale is a known-broken placeholder. Then: the 466x argument, robust vs plain, where 1.349 comes from |
 
 ## Not written yet
@@ -17,7 +19,6 @@ Each document lands with the code it describes, so neither drifts ahead.
 | planned | lands with |
 |---|---|
 | `maths/whitening.md` | `Whitener` |
-| `maths/decimation.md` | the FIR resampler |
 | `maths/windowing.md` | the window cutter |
 
 ## The stage order
