@@ -70,7 +70,9 @@ Prefer *why*, but restating *what* beats no comment.
 - Imports at top, grouped stdlib / third-party / local. Never `import *`.
 - `if x is None`, not `== None`. `if not items` for emptiness — different
   tests, since `0`, `""` and empty arrays are all falsy.
-- Type hints on anything public. Never a mutable default argument.
+- **No type annotations in signatures** -- not `-> np.ndarray` on the end, not
+  `data: np.ndarray` on a parameter. The docstring already gives the type and
+  the shape, which is the part worth reading. Never a mutable default argument.
 - f-strings, double quotes, context managers for files.
 - Annotate array shapes at function boundaries: `# [batch, n_features, n_times]`.
 - **Always pass an explicit `dim` / `axis`** to `mean`, `sum`, `softmax`,

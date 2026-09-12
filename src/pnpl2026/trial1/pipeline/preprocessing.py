@@ -65,7 +65,7 @@ class ChannelStandardiser:
         #concatenate all the data we kept along the channel axis.
         pooled = np.concatenate(thinned, axis=1)
 
-        #v1: (x-mean)/std
+        #v1: (x-mean)/std. temporary
         centre = np.mean(pooled, axis=1)
         scale = np.std(pooled, axis=1)
 
@@ -138,10 +138,14 @@ class Whitener:
 
         #fetch covariance and number of time points data
         covariance, N = cls.pooled_covariance(recordings, standardiser)
-        matrix, eigenvalues = cls.whitening_matrix(
-            covariance, n_components, shrinkage
-        )
-        cls.report_spectrum(eigenvalues, n_components, N)
+
+        #perform whitening
+        matrix, eigenvalues = cls.whitening_matrix(covariance, n_components, shrinkage)
+
+        #perform a sanity check
+        cls.cutoff_sanity_check(eigenvalues, n_components, N)
+
+        #return
         return cls(matrix=matrix, eigenvalues=eigenvalues, shrinkage=shrinkage)
 
     def apply(self, standardised: np.ndarray) -> np.ndarray:
@@ -233,26 +237,26 @@ class Whitener:
             raise ValueError(f"shrinkage must be >= 0, got {shrinkage}")
 
         #eigh returns eigenvalues and eigenvectors in ascending order
-        #adjust so we get values in an order we want
-        #get orthogonal matrix of eigenvectors and diagonal matrix of eigenvalues
         eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+
+        #sort so the largest eigenvalues are first
         order = np.argsort(eigenvalues)[::-1]
         eigenvalues = eigenvalues[order]
         eigenvectors = eigenvectors[:, order]
 
-        #keep only some eigenvectors and values
+        #keep only the largest eigenvalues (n_components is the index cutoff)
         kept_values = eigenvalues[:n_components]
         kept_vectors = eigenvectors[:, :n_components]
 
         #whitening divides by sqrt(eigenvalue) so make a floor to avoid explosions
         floor = shrinkage * eigenvalues.mean()
 
-        #PCA whitening
+        #apply PCA whitening
         matrix = (kept_vectors).T / np.sqrt(kept_values + floor)
         return matrix, eigenvalues
 
     @staticmethod
-    def report_spectrum(eigenvalues, n_components, n_times_seen):
+    def cutoff_sanity_check(eigenvalues, n_components, n_times_seen):
         """
         Print what the spectrum looked like and where the cut fell.
 
@@ -267,15 +271,17 @@ class Whitener:
             n_times_seen (int): timepoints the covariance was built from
         """
         n_channels = len(eigenvalues)
+        #normalise the cumulative sum to observe the % of variance kept
         cumulative = np.cumsum(eigenvalues) / eigenvalues.sum()
+
+        #signal variance kept by the cutoff
+        print(f"variance kept {cumulative[n_components - 1]:.4%}")
+
+        if n_components > n_channels:
+            raise ValueError(f"n_components expected to be smaller than n_channels")
+
         print(
-            f"[preproc] whitener fitted on {n_times_seen:,} timepoints, "
-            f"{n_channels} -> {n_components} components, "
-            f"variance kept {cumulative[n_components - 1]:.4%}"
-        )
-        if n_components < n_channels:
-            print(
-                f"[preproc]   last kept {eigenvalues[n_components - 1]:.3e}, "
-                f"first dropped {eigenvalues[n_components]:.3e}, "
-                f"gap {eigenvalues[n_components - 1] / eigenvalues[n_components]:.1f}x"
+            f"last kept eigenvalue {eigenvalues[n_components - 1]:.3e}, "
+            f"first dropped eigenvalue {eigenvalues[n_components]:.3e}, "
+            f"ratio between them {eigenvalues[n_components - 1] / eigenvalues[n_components]:.1f}x"
             )
