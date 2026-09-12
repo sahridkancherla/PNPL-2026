@@ -54,6 +54,8 @@ plausibility check, not ground truth.
 
 ## Constraints
 
+- **Kamil commits, Claude does not.** Never run `git commit`; leave work in
+  the working tree and say what is uncommitted. See `CLAUDE.md`.
 - **Do not use the HPC unless explicitly told to.** See `CLAUDE.md`.
 - The dataset is on an external volume. **That path must never reach code or
   config** — it is not mounted on the cluster or on a collaborator's machine.

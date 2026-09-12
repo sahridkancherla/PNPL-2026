@@ -60,6 +60,20 @@ Run it against the same session split as the baseline, or the comparison means
 nothing. **Run the `shape-check` skill before the first training run** of any
 new model — a silent shape bug trains happily to exactly chance.
 
+## Git — Claude does not commit
+
+> ⚠️ **Kamil commits. Claude does not.** Never run `git commit`, and do not
+> stage files on your own initiative either. Leave changes in the working tree
+> and say plainly what is uncommitted.
+
+This **overrides** the machine-global `~/.claude/rules/git-workflow.md`, which
+says "commit freely, never push unasked". The push half still holds — never
+push. The commit half does not apply in this repo.
+
+Writing files, editing them, `git mv` and `git status` are all still fine. The
+restriction is on committing. When work reaches a natural savepoint, say so and
+offer a commit message rather than running it.
+
 ## Data and storage
 
 - **All bulk data, checkpoints, logs and submissions stay out of git** — under

@@ -8,7 +8,7 @@ Every transform here is fitted on **training recordings only**.
 | where | what |
 |---|---|
 | `../preprocessing.py` | fitted transforms: `ChannelStandardiser`, `Whitener` |
-| `maths/standardisation.md` | why median/IQR, where 1.349 comes from, the 466x argument |
+| `maths/standardisation.md` | ⚠️ **opens with a TEMPORARY notice** -- the fitted scale is a known-broken placeholder. Then: the 466x argument, robust vs plain, where 1.349 comes from |
 
 ## Not written yet
 

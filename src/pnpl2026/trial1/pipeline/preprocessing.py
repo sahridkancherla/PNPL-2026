@@ -1,42 +1,17 @@
-"""Fitted preprocessing for continuous MEG recordings.
 
-Everything in this module is **fitted on the training recordings only** and
-applied unchanged to validation and holdout. Fitting on all recordings leaks
-each validation session's own statistics into the transform, which defeats the
-one thing holding out whole sessions is meant to measure.
-
-Transforms here operate on continuous `[n_channels, n_times]` recordings, not
-on cut windows -- filtering and covariance estimation both need the unbroken
-stream. Per-window and per-batch transforms (cropping, augmentation) happen
-later, on the GPU, and do not belong here.
-
-The maths behind each choice is recorded in `info/maths/`.
-"""
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Self
 
 import numpy as np
-
-# The interquartile range of a standard normal, 2 * 0.6745. Dividing an IQR by
-# this makes the result agree with the standard deviation on clean Gaussian
-# data, so the robust scale stays comparable to a familiar one.
-NORMAL_IQR = 1.349
 
 
 @dataclass
 class ChannelStandardiser:
-    """Per-channel centre and scale, robust to MEG artifacts.
-
-    Magnetometers and gradiometers are different instruments in different
-    units -- measured on this hardware, gradiometers are ~21.6x larger. Any
-    later step that treats channels as commensurable is otherwise dominated by
-    the gradiometers; in the covariance the ratio is squared to ~466x, which
-    would push every eigenvector into the gradiometer subspace and discard the
-    102 magnetometers by arithmetic accident rather than by decision.
+    """
+    Process and normalise all channels
 
     ATTRS:
         centre (np.ndarray): [n_channels] per-channel median
@@ -49,32 +24,12 @@ class ChannelStandardiser:
     @classmethod
     def fit(
         cls,
-
         #iterate through every recording
         recordings: Iterable[np.ndarray],
         scale_factor: int = 50,
-        seed: int = 0,
-    ) -> Self:
-        """Fit a centre and scale per channel over the training recordings.
-
-        Median and IQR rather than mean and standard deviation: MEG retains
-        blinks, movement and SQUID jumps even after SSS. Both the mean and the
-        standard deviation are unbounded in a single point -- one jump of
-        magnitude M inflates the standard deviation by roughly M / sqrt(T) --
-        so an artifact would end up setting the scale meant to remove it. The
-        median moves by at most one rank position however extreme the outlier.
-
-        A mean streams in two numbers and a covariance streams in a fixed
-        matrix, but a percentile needs every value at once in order to sort
-        them, so the fit holds a thinned copy instead. Keeping one timepoint in
-        50 leaves ~262k samples for ~320 MB and costs ~0.15% on the estimate,
-        against 16 GB to keep all of them.
-
-        Timepoints are drawn at RANDOM, not every nth. Strided sampling of a
-        125 Hz recording at every 50th is a 2.5 Hz sampler, so any component at
-        a multiple of 2.5 Hz lands on the same phase every time -- alpha at
-        10 Hz above all. Measured on a synthetic 10 Hz oscillation, strided
-        sampling underestimated the scale by 68% where random was within 2%.
+        seed: int = 0):
+        """
+        Fit a centre and scale per channel over the training recordings.
 
         ARGS:
             recordings: iterable of [n_channel, times] arrays.
@@ -88,88 +43,239 @@ class ChannelStandardiser:
         """
         #preparation
         if scale_factor < 1:
-            raise ValueError(f"scale_factor must be >= 1, got {scale_factor}")
+            raise ValueError(f"subsample must be >= 1, got {scale_factor}")
         rng = np.random.default_rng(seed)
 
-        #thin each recording 
+        #thin each recording
         thinned = []
 
         #iterate through every recording
         for recording in recordings:
 
-            #number of time points measured
+            #find the number of time points measured
             n_times = recording.shape[1]
 
             #scale down the number of points we keep (so we don't store as much data)
-            n_keep = max(1, n_times // scale_factor)
-            # Without replacement: a repeated timepoint is counted twice when
-            # the pooled sample is sorted, so it carries double weight in the
-            # percentile. Measured at ~5% extra variance, bought for nothing.
+            n_keep = n_times // scale_factor
             keep = rng.choice(n_times, size=n_keep, replace=False)
-            # Fancy indexing returns a copy, so nothing pins the parent array
-            # alive -- a strided view would have kept all 16 GB resident.
-            thinned.append(recording[:, keep])
-        if not thinned:
-            raise ValueError("No recordings were given to fit on.")
 
-        # [n_channels, n_kept] -- one pooled cloud over every training session.
+            #keep only the thinned data
+            thinned.append(recording[:, keep])
+
+        #concatenate all the data we kept along the channel axis.
         pooled = np.concatenate(thinned, axis=1)
 
-        # A single surviving timepoint gives an IQR of exactly zero, which the
-        # flat-channel guard below would misreport as a dead sensor.
-        if pooled.shape[1] < 2:
-            raise ValueError(
-                f"Only {pooled.shape[1]} timepoint(s) survived scale_factor="
-                f"{scale_factor}; an IQR needs at least two. Lower it."
-            )
-
-        centre = np.median(pooled, axis=1)
-        upper, lower = np.percentile(pooled, [75, 25], axis=1)
-        scale = (upper - lower) / NORMAL_IQR
-
-        # NaN slips silently through every comparison below, and no choice of
-        # centre or scale repairs a channel whose samples are already NaN.
-        if not (np.isfinite(centre).all() and np.isfinite(scale).all()):
-            raise ValueError(
-                "Non-finite centre or scale: channel(s) "
-                f"{np.flatnonzero(~np.isfinite(centre) | ~np.isfinite(scale)).tolist()} "
-                "contain NaN or inf. Fix the recording, not the statistic."
-            )
-
-        # A channel with no spread would divide by zero. Upstream bad-channel
-        # repair should prevent this, so it means something is wrong: pass the
-        # channel through as zeros rather than emitting infinities downstream.
-        flat = scale <= 0
-        if flat.any():
-            print(
-                f"[preproc] WARNING: {int(flat.sum())} channel(s) have zero "
-                f"spread and will be zeroed: {np.flatnonzero(flat).tolist()}"
-            )
-            scale = np.where(flat, 1.0, scale)
+        #v1: (x-mean)/std
+        centre = np.mean(pooled, axis=1)
+        scale = np.std(pooled, axis=1)
 
         return cls(centre=centre, scale=scale)
 
-    def apply(self, recording: np.ndarray) -> np.ndarray:
-        """Standardise one recording.
-
-        Returns float64 regardless of input dtype: the covariance accumulated
-        from this in `Whitener.fit` is a sum over millions of timepoints, and
-        float32 loses meaningful precision over that many additions.
+    def apply(self, recording: np.ndarray):
+        """
+        Standardise one recording.
 
         ARGS:
             recording (np.ndarray): [n_channels, n_times], continuous
 
         RETURNS:
             standardised : [n_channels, n_times] - float64, zero-centred,
-                each channel with unit robust scale
+                each channel with unit variance
         """
+
+        #number of channels
         n_channels = recording.shape[0]
+
+        #check for dimension mismatches
         if n_channels != len(self.centre):
             raise ValueError(
-                f"Expected {len(self.centre)} channels, got {n_channels}. "
-                "The standardiser was fitted on a different sensor set."
+                f"Expected {len(self.centre)} channels, got {n_channels}. ")
+
+        #(x - mean)/std as a temporary formula
+        normalised = recording.astype(np.float64, copy=False) - self.centre[:, None]
+        return normalised / self.scale[:, None]
+
+
+@dataclass
+class Whitener:
+    """
+    Whiten and standardise data.
+
+    ATTRS:
+        matrix (np.ndarray): [n_components, n_channels] - apply as matrix @ x
+        eigenvalues (np.ndarray): [n_channels] - the FULL spectrum, largest
+            first. Kept whole rather than truncated: seeing past the cut is
+            what justifies where the cut was made.
+        shrinkage (float): fraction of the mean eigenvalue added to all of
+            them before inverting. Provenance -- not recoverable from matrix.
+    """
+
+    matrix: np.ndarray
+    eigenvalues: np.ndarray
+    shrinkage: float
+
+    @classmethod
+    def fit(
+        cls,
+        recordings: Iterable[np.ndarray],
+        standardiser: ChannelStandardiser,
+        n_components: int = 73,
+        shrinkage: float = 0.01):
+        """
+        Fit a whitener over the standardised training recordings.
+
+        ARGS:
+            recordings: iterable of [n_channels, n_times] arrays, raw. They are
+                standardised here, so do not pre-apply the standardiser.
+            standardiser: a fitted ChannelStandardiser, applied per recording.
+            n_components (int): directions to keep. 73 is the measured rank.
+            shrinkage (float): floor added to the eigenvalues before inverting,
+                as a fraction of their mean. Bounds the 1/sqrt gain.
+
+        RETURNS:
+            a fitted Whitener
+        """
+
+        #fetch covariance and number of time points data
+        covariance, N = cls.pooled_covariance(recordings, standardiser)
+        matrix, eigenvalues = cls.whitening_matrix(
+            covariance, n_components, shrinkage
+        )
+        cls.report_spectrum(eigenvalues, n_components, N)
+        return cls(matrix=matrix, eigenvalues=eigenvalues, shrinkage=shrinkage)
+
+    def apply(self, standardised: np.ndarray) -> np.ndarray:
+        """
+        Whiten one STANDARDISED recording.
+
+        ARGS:
+            standardised (np.ndarray): [n_channels, n_times], already through
+                ChannelStandardiser.apply
+
+        RETURNS:
+            whitened : [n_components, n_times] - uncorrelated, unit variance
+        """
+        n_channels = standardised.shape[0]
+
+        #check for dimension mismatches
+        if n_channels != self.matrix.shape[1]:
+            raise ValueError(
+                f"Expected {self.matrix.shape[1]} channels, got {n_channels}. "
+                "The whitener was fitted on a different sensor set."
             )
 
-        # The None index broadcasts each per-channel constant along time.
-        centred = recording.astype(np.float64, copy=False) - self.centre[:, None]
-        return centred / self.scale[:, None]
+        #one matmul: [n_components, n_channels] @ [n_channels, n_times]
+        return self.matrix @ standardised
+
+    @staticmethod
+    def pooled_covariance(recordings, standardiser):
+        """
+        Accumulate one covariance across every recording, streaming.
+
+        ARGS:
+            recordings: iterable of [n_channels, n_times] arrays, raw.
+            standardiser: a fitted ChannelStandardiser, applied per recording. Its
+                pooled centre is what makes the sum accumulable -- re-centring each
+                recording would erase the offsets between sessions.
+
+        RETURNS:
+            covariance : [n_channels, n_channels]
+            n_times_seen (int): total timepoints the covariance was built from
+        """
+        n_channels = len(standardiser.centre)
+
+        #prepare shapes before finding covariance
+        #scatter = will be used for covariance. N = number of time points 
+        scatter = np.zeros((n_channels, n_channels))
+        N = 0
+
+        #prepare data necessary to find covariance matrix
+        for recording in recordings:
+            standardised = standardiser.apply(recording)
+
+            #X @ X.T and N for 1/N later in typical covariance matrix formula
+            scatter += standardised @ standardised.T
+            N += standardised.shape[1]
+
+        #error check
+        if N == 0:
+            raise ValueError("No recordings were given to fit on.")
+        
+        #covariance matrix
+        covariance = scatter / N
+
+        return covariance, N
+
+    @staticmethod
+    def whitening_matrix(covariance, n_components, shrinkage):
+        """
+        PCA whitening
+
+        ARGS:
+            covariance (np.ndarray): [n_channels, n_channels], symmetric
+            n_components (int): directions to keep, largest variance first
+            shrinkage (float): floor added to every eigenvalue before inverting,
+                as a fraction of their mean
+
+        RETURNS:
+            matrix : [n_components, n_channels] - apply as matrix @ x
+            eigenvalues : [n_channels] - the FULL spectrum, largest first
+        """
+        #find number of channels
+        n_channels = covariance.shape[0]
+
+        #error check
+        if not 1 <= n_components <= n_channels:
+            raise ValueError(
+                f"n_components must be in 1..{n_channels}, got {n_components}"
+            )
+        if shrinkage < 0:
+            raise ValueError(f"shrinkage must be >= 0, got {shrinkage}")
+
+        #eigh returns eigenvalues and eigenvectors in ascending order
+        #adjust so we get values in an order we want
+        #get orthogonal matrix of eigenvectors and diagonal matrix of eigenvalues
+        eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+        order = np.argsort(eigenvalues)[::-1]
+        eigenvalues = eigenvalues[order]
+        eigenvectors = eigenvectors[:, order]
+
+        #keep only some eigenvectors and values
+        kept_values = eigenvalues[:n_components]
+        kept_vectors = eigenvectors[:, :n_components]
+
+        #whitening divides by sqrt(eigenvalue) so make a floor to avoid explosions
+        floor = shrinkage * eigenvalues.mean()
+
+        #PCA whitening
+        matrix = (kept_vectors).T / np.sqrt(kept_values + floor)
+        return matrix, eigenvalues
+
+    @staticmethod
+    def report_spectrum(eigenvalues, n_components, n_times_seen):
+        """
+        Print what the spectrum looked like and where the cut fell.
+
+        Without this the rank choice is invisible: a cut in the wrong place still
+        produces a healthy-looking whitener. The gap across the cut is the evidence
+        that the cut is in the right place -- a large one means the dropped
+        directions really were empty, and ~1x means you sliced through noise.
+
+        ARGS:
+            eigenvalues (np.ndarray): [n_channels] the full spectrum, largest first
+            n_components (int): where the cut was made
+            n_times_seen (int): timepoints the covariance was built from
+        """
+        n_channels = len(eigenvalues)
+        cumulative = np.cumsum(eigenvalues) / eigenvalues.sum()
+        print(
+            f"[preproc] whitener fitted on {n_times_seen:,} timepoints, "
+            f"{n_channels} -> {n_components} components, "
+            f"variance kept {cumulative[n_components - 1]:.4%}"
+        )
+        if n_components < n_channels:
+            print(
+                f"[preproc]   last kept {eigenvalues[n_components - 1]:.3e}, "
+                f"first dropped {eigenvalues[n_components]:.3e}, "
+                f"gap {eigenvalues[n_components - 1] / eigenvalues[n_components]:.1f}x"
+            )

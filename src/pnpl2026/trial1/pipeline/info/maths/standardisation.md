@@ -1,23 +1,33 @@
 # Standardisation
 
-**Stage 1 of the cache pipeline.** Implemented as `ChannelStandardiser` in
-`../../preprocessing.py`.
-
-## The operation
-
-For each channel `c` independently, two fitted numbers and one elementwise
-transform:
-
-```
-x_c(t)  <-  ( x_c(t) - centre_c ) / scale_c
-```
-
-Nothing mixes between channels. 306 pairs of numbers, applied along each row.
-
-```
-centre_c  =  median over time of channel c
-scale_c   =  ( P75 - P25 ) / 1.349
-```
+> ## v1: the plain z-score
+>
+> **As of 2026-09-11, `ChannelStandardiser.fit` computes:**
+>
+> ```python
+> centre = np.mean(pooled, axis=1)
+> scale  = np.std(pooled, axis=1)      # apply: (x - centre) / scale
+> ```
+>
+> A deliberate v1 choice: the familiar z-score, **not robust to artifacts**.
+> The rest of this document is the argument for the robust alternative and
+> when to switch.
+>
+> | option | formula | pro | con |
+> |---|---|---|---|
+> | **v1, current** | `(x - mean) / std` | simple, one line, nothing to tune | 10 samples at 1000 sigma in 200,000 inflate the scale **614%** |
+> | robust | `(x - median) / (IQR / 1.3489795)` | the same artifact moves it **0.00%** | needs values held in memory, hence subsampling |
+>
+> **Which one matters here is testable, not arguable.** Fit both on the real
+> recordings and compare the two `scale` arrays. Close agreement means the
+> upstream `bads+headpos+sss` cleaning already removed the artifacts and v1 is
+> simply correct. Channels differing by 5x or more are the artifacted sensors,
+> and name themselves.
+>
+> ⚠️ Note v1 still **subsamples** (`scale_factor=50`), which a mean and a
+> standard deviation do not require -- both stream exactly in two accumulators
+> over every timepoint. Dropping the subsampling would make the estimate exact
+> and delete the `scale_factor`/`seed` arguments entirely.
 
 ---
 
