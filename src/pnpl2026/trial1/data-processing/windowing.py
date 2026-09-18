@@ -34,7 +34,7 @@ def cut_windows(recording, onsets_s, sample_rate=250.0, bounds=WINDOW_BOUNDS):
     #some words are said at the very beginning and some at the very end
     #they do not fit the window constraints (e.g., word said as 0.05s can't have 0.05 - 0.28s)
     #thus they need filtering. v1 is just dropping them
-    fits = (window_start >= 0) and (window_start + n_samples <= n_times)
+    fits = (window_start >= 0) & (window_start + n_samples <= n_times)
 
     #update the list of windows starts we will work with
     kept_window_start_indices = np.flatnonzero(fits)
@@ -51,6 +51,6 @@ def cut_windows(recording, onsets_s, sample_rate=250.0, bounds=WINDOW_BOUNDS):
         end = start + n_samples
 
         #record the windows
-        windows[index] = recording[:, start : start + end]
+        windows[index] = recording[:, start : end]
 
-    return windows, kept_window_start
+    return windows, kept_window_start_indices

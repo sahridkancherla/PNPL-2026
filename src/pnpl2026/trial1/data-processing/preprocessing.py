@@ -241,6 +241,8 @@ class Whitener:
 
         #sort so the largest eigenvalues are first
         order = np.argsort(eigenvalues)[::-1]
+
+        #eigenvalues = 1D, eigenvectors = 2D
         eigenvalues = eigenvalues[order]
         eigenvectors = eigenvectors[:, order]
 
@@ -252,7 +254,8 @@ class Whitener:
         floor = shrinkage * eigenvalues.mean()
 
         #apply PCA whitening
-        matrix = (kept_vectors).T / np.sqrt(kept_values + floor)
+        #use [:, None] since kept_values and floor are both 1D. 
+        matrix = (kept_vectors).T / np.sqrt(kept_values + floor)[:, None]
         return matrix, eigenvalues
 
     @staticmethod

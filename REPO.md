@@ -13,11 +13,9 @@ Keep this file current. A stale map is worse than none.
 |---|---|
 | `README.md` | front door for humans. Short; points inward. |
 | `REPO.md` | this file — the map. |
-| `CLAUDE.md` | the goal and the working rules — including that **Claude never commits**. No content, no navigation. |
-| `FORMAT.md` | the competition: metric, data, label space, submission, HPC access. |
+| `CLAUDE.md` | the competition, the data, and the working rules — including that **Claude never commits**. |
 | `LICENSE` | MIT. |
 | `.claude/` | Claude's configuration — rules, skills, settings. |
-| `handoff-docs/` | one document per feature, updated in place. Current state, not history. |
 | `src/pnpl2026/` | the package. Shared machinery at its root; one subpackage per trial. |
 | `configs/` | YAML run configs. `base.yaml` is defaults; a second file overrides it. |
 | `pbs/` | PBS job scripts for the Imperial HPC. `train.pbs`, `sweep.pbs`. |
@@ -28,12 +26,6 @@ Keep this file current. A stale map is worse than none.
 | `tutorial.ipynb` | the competition's own walkthrough notebook, kept as reference. |
 | `pyproject.toml`, `uv.lock` | dependencies. `uv` manages the environment. |
 | `.gitignore`, `.gitattributes` | bulk-data exclusions; LF endings for `.pbs`/`.sh`. |
-
-## Handoff docs
-
-Two folders, split by feature size. A feature spanning many days or sessions
-goes in `big/`; one that finishes inside a single session goes in `small/`.
-`small/` should be much the rarer of the two.
 
 ## Trials
 

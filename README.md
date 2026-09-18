@@ -5,9 +5,8 @@ single trial over a fixed 50-word vocabulary. Scored on BAcc@10, so chance is
 20%.
 
 **Start with [REPO.md](REPO.md)** — it is the map of everything here.
-[CLAUDE.md](CLAUDE.md) holds the goal and the working rules;
-[FORMAT.md](FORMAT.md) holds the competition itself — metric, data, label
-space, submission format, and how to get onto the HPC.
+[CLAUDE.md](CLAUDE.md) holds the competition itself — metric, data, label
+space, submission format, the working rules, and how to get onto the HPC.
 
 ## Setup
 

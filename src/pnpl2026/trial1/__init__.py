@@ -8,6 +8,4 @@ the sample rate.
 
 Shared, trial-independent machinery -- the metric, the competition label
 space, the run config -- stays in `pnpl2026` above this package.
-
-Design and current state: `handoff-docs/big/convnext-block.md`.
 """

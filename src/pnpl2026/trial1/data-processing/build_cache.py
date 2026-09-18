@@ -18,15 +18,19 @@ from .preprocessing import ChannelStandardiser, Whitener
 from .storage import clip_and_cast
 from .windowing import WINDOW_BOUNDS, cut_windows
 
-# ⚠️ UNVERIFIED against real files -- `pnpl` is not installed locally and no
-# data is present. These four names are the only place the on-disk format is
-# assumed; correct them here once a real recording is in hand.
+# Verified against real recordings on 2026-09-14. The h5 also carries a `times`
+# dataset and the events table several other time columns.
 H5_DATASET_KEY = "data"
-EVENTS_ONSET_COLUMN = "onset"
+
+# ⚠️ `timeds`, NOT `timemeg`. The events table carries both: `timemeg` is the
+# original 1 kHz timeline and lands off the 250 Hz sample grid 6% of the time,
+# which is a random sub-sample shift per trial. `timeds` is the downsampled
+# timeline and matches the h5 exactly. There is no `onset` column.
+EVENTS_ONSET_COLUMN = "timeds"
 EVENTS_KIND_COLUMN = "kind"
 EVENTS_SEGMENT_COLUMN = "segment"
 
-#the events row type that marks a spoken word, per FORMAT.md section 2
+#the events row type that marks a spoken word, per CLAUDE.md section 2
 WORD_KIND = "word"
 
 #one timepoint in this many is held for the standardiser fit
