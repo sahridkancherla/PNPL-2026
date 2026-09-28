@@ -15,15 +15,20 @@ num_workers: 8
 duty_cycle: 1.0
 cooldown_every_minutes: 0.0
 cooldown_seconds: 0.0
-accelerator: auto
 
-# A 24 GB RTX6000 holds far more than the laptop batch. 8.0M parameters at 50
-# frames is small; the DataLoader will be the limit, not memory.
+# cuda, not auto: auto falls back to the CPU without a word when no GPU is
+# visible, and a CPU run quietly fills the whole walltime.
+accelerator: cuda
+
+# Memory is nowhere near the limit: batch 512 peaks at 5.3 GB (measured on the
+# laptop RTX 3060) against the L40S's 48 GB. The GPU is the limit, not the
+# DataLoader -- with the cache staged to local disk, eight workers supply a
+# batch every ~7 ms against a ~0.2 s step.
 # ⚠️ lr is scaled with the batch: 4x the batch, 2x the lr (square-root scaling,
 # which is the safer of the two conventions for a model this size).
 batch_size: 512
 lr: 6.0e-4
 
 # Long enough to matter. Walltime is a kill, not a failure -- pbs/trial5.pbs
-# passes --resume, so an 8-hour overrun means resubmitting the same script.
+# passes --resume, so a walltime overrun means resubmitting the same script.
 max_epochs: 60
