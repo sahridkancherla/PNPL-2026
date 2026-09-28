@@ -1,0 +1,47 @@
+# Trial 1: whitened 73-component cache, multi-branch residual net with the
+# quadrature envelope branch.
+#
+# Only the lines that DIFFER from base.yaml belong here.
+# WRITTEN BY AI -- 2026-09-24, unverified.
+
+run_name: trial1
+
+# ⚠️ The model is fed 73 whitened components, not the 306 sensors. These two
+# must agree; Trial1Config raises if they do not.
+n_channels: 73
+n_components: 73
+
+# Cache location, RELATIVE to the repo root. Never an absolute path.
+cache_dir: data/trial1_cache
+
+# Cached window is wider than the scored (0, 1) s one. The margin is what
+# time-jitter augmentation slides into -- without it, jitter is impossible.
+window_bounds: [-0.32, 1.28]
+clip_sigma: 20.0
+
+model: trial1_net
+model_kwargs:
+  d_model: 192
+  n_blocks: 4
+  pooling: mean          # "attention" is the alternative; measure, don't assume
+  head_dropout: 0.1
+  with_quadrature: true  # set false for the ablation
+  ffn_expansion: 2
+
+# One-sided jitter in seconds. 0.1 s = 25 samples at 250 Hz, well inside the
+# 0.32 s margin the cache carries.
+jitter_seconds: 0.1
+
+# 0.0 unweighted, 0.5 sqrt-inverse, 1.0 full inverse. Full inverse reproduces
+# the vocabulary's 121x spread in the loss and makes the batch gradient a
+# lottery on which rare tokens landed in it.
+class_weight_power: 0.5
+
+# ⚠️ PyYAML is YAML 1.1: `1e-4` loads as the STRING "1e-4". Always write the
+# decimal point and the sign. base.yaml's 1e-5 is caught by config._coerce,
+# but do not rely on that.
+lr: 1.0e-4
+weight_decay: 0.01
+batch_size: 128
+max_epochs: 50
+patience: 8

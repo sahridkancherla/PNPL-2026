@@ -1,4 +1,4 @@
-# pipeline/ — building the trial-1 cache
+# data_processing/ — building the trial-1 cache
 
 Turns 162 continuous recordings into one array of windows the model can read.
 Every transform here is fitted on **training recordings only**.
@@ -19,7 +19,7 @@ Each document lands with the code it describes, so neither drifts ahead.
 | planned | lands with |
 |---|---|
 | `maths/whitening.md` | `Whitener` |
-| `maths/windowing.md` | the window cutter |
+| `maths/windowing.md` | `../windowing.py`, which now exists |
 
 ## The stage order
 
