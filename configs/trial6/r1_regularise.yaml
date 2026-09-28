@@ -1,0 +1,7 @@
+# R1 -- NOT in the design's table. Its training row adds time jitter of
+# +/-20-40 ms and small Gaussian noise but no run tests them, so they get one.
+# EMA and component dropout are already in C0: trial 5 had both.
+# Jitter 0.03 s is +/-8 samples; trial 5's 0.1 s was +/-25. Adopt if above C0.
+run_name: trial6_r1
+jitter_seconds: 0.03
+gaussian_noise: 0.1

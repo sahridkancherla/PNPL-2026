@@ -1,0 +1,4 @@
+# C0 with its TRAINING labels shuffled -- the chance line, measured rather than
+# assumed at 0.20. C4 and C5 are adopted only if clearly above this run.
+run_name: trial6_c0_shuffled
+shuffle_labels: true

@@ -1,0 +1,7 @@
+# C4 -- does beta and low gamma carry word information? The 20-40 Hz envelope
+# ALONE: stream A off, and with it the broadband amplitude side channel.
+# Adopt stream B if clearly above c0_shuffled, not merely above 0.20.
+run_name: trial6_c4
+model_kwargs:
+  evoked_stream: false
+  envelope_bands: [[20.0, 40.0]]

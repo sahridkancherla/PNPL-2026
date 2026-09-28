@@ -1,0 +1,5 @@
+# C1 -- is the transformer earning its 6.3M? Depth 8 -> 2, ~3.3M in total.
+# Adopt if val bAcc@10 is at least C0's.
+run_name: trial6_c1
+model_kwargs:
+  depth: 2

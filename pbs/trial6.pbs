@@ -1,0 +1,143 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=64gb:ngpus=1:gpu_type=RTX6000
+#PBS -l walltime=03:00:00
+#PBS -N pnpl-trial6
+#PBS -j oe
+#PBS -o logs/
+
+# Trial 6: the Variant C ablation queue. One run per line of
+# configs/trial6/runs.txt, picked by the array index or by RUN. From the repo
+# root:
+#
+#     qsub -J 1-10 pbs/trial6.pbs
+#         lines 1-10, every run but C6, as one array on RTX6000s
+#
+#     qsub -v RUN=11 -l select=1:ncpus=8:mem=64gb:ngpus=1:gpu_type=L40S \
+#          -l walltime=08:00:00 pbs/trial6.pbs
+#         line 11, C6 alone. 250 frames needs ~22 GB at batch 512, too close
+#         to an RTX6000's 24 GB, so it goes to a 48 GB L40S
+#
+#     qsub -v RUN=<n> pbs/trial6.pbs
+#         any one run again: a rerun, or a resume after a walltime kill
+#
+# Walltime, measured on the laptop RTX 3060 at batch 512 and scaled by the
+# GPUs' specs, so an estimate. On an RTX6000, 20 epochs of the C0-like runs
+# take ~70-90 min, W05 ~45, C1 ~30, C2 ~20; 3 h is twice the slowest. C6 is
+# ~3-4 h on an L40S, hence its 8 h. Early stopping (patience 5) can end any
+# run sooner.
+#
+# ⚠️ gpu72 allows 12 GPUs per user at once. The array plus C6 is 11.
+#
+# ⚠️ C9, the session probe, reads C0's best.ckpt, so it runs after the array.
+# The command is in src/pnpl2026/trial6/info/variant-c.md.
+#
+# ⚠️ num_workers in configs/trial6/hpc.yaml must match ncpus above. A mismatch
+# either starves the GPU or wastes half the allocation.
+#
+# ⚠️ Submit from the repo root. `-o logs/` is resolved against the directory
+# qsub ran in, not against the `cd` below.
+#
+# ⚠️ Nothing below downloads. Compute nodes have no outbound internet, so do
+# these from a LOGIN node before the first submission:
+#     uv sync                        builds .venv, torch cu128 included
+#     data/trial1_cache/             the 18.3 GB cache, copied up to RDS
+#     data/word_embeddings_t5.npz    the semantic head's targets, likewise
+# The preflight below names whichever is missing.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+# Without this, python block-buffers stdout when it is not a terminal.
+export PYTHONUNBUFFERED=1
+# uv on a compute node must never try the network: offline, it fails at once
+# and names the missing package, where online it would hang.
+export UV_OFFLINE=1
+
+# The array index when there is one, otherwise RUN from `qsub -v RUN=<n>`.
+INDEX="${PBS_ARRAY_INDEX:-${RUN:-}}"
+if [ -z "$INDEX" ]; then
+    echo "no run chosen: submit with -J 1-10, or -v RUN=<line of runs.txt>" >&2
+    exit 1
+fi
+RUN_CONFIG=$(sed -n "${INDEX}p" configs/trial6/runs.txt)
+if [ -z "$RUN_CONFIG" ] || [ ! -f "$RUN_CONFIG" ]; then
+    echo "line ${INDEX} of configs/trial6/runs.txt names no config: '${RUN_CONFIG}'" >&2
+    exit 1
+fi
+RUN_NAME=$(basename "$RUN_CONFIG" .yaml)
+
+CONFIGS=(configs/base.yaml configs/trial6/trial6.yaml configs/trial6/hpc.yaml "$RUN_CONFIG")
+
+# PBS spools stdout on the compute node's local disk and only copies it to
+# logs/ when the job exits, so the -o file cannot be tailed while running.
+# tee to RDS instead -- this file updates live, one per run:
+#     tail -f logs/<jobid>.<run>.live.log
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.${RUN_NAME}.live.log"
+echo "run ${INDEX}: ${RUN_CONFIG} -> live log: $LIVE_LOG"
+
+# Check the inputs and the GPU in the first minute, not after hours of queue.
+# Paths come from the configs, so this script never holds a second copy of
+# them. Prints the cache directory on stdout; everything else goes to stderr.
+preflight() {
+    uv run --frozen python - "${CONFIGS[@]}" <<'PYTHON'
+import sys
+
+import torch
+
+from pnpl2026.trial6.config import load_trial6_config
+
+cfg = load_trial6_config(*sys.argv[1:])
+
+# The embedding table is only read when the semantic head is on.
+needed = [cfg.resolved_cache_dir() / "manifest.json"]
+if cfg.semantic_weight > 0:
+    needed.append(cfg.resolved_word_embeddings())
+missing = [str(path) for path in needed if not path.exists()]
+if missing:
+    sys.exit(f"[preflight] not on RDS: {missing}. Copy up from a login node.")
+
+# Exactly one. None means Lightning trains on the CPU; several means its
+# devices=auto spreads the run over GPUs this job was never given.
+n_gpus = torch.cuda.device_count()
+if n_gpus != 1:
+    sys.exit(f"[preflight] torch sees {n_gpus} GPUs; this job asked for 1.")
+
+device = torch.cuda.get_device_name(0)
+print(
+    f"[preflight] {cfg.run_name} on {device} | torch {torch.__version__} | "
+    f"CUDA {torch.version.cuda}",
+    file=sys.stderr,
+)
+print(cfg.resolved_cache_dir())
+PYTHON
+}
+
+# pipefail is set above, so a failure anywhere in here still fails the job
+# through tee.
+{
+    CACHE_DIR=$(preflight)
+
+    # Copy the cache to the node's local disk. Training reads 58 KB windows in
+    # random order, ~280k of them an epoch; from RDS that is random reads over
+    # the network, which starves the GPU and loads the shared filesystem.
+    # $TMPDIR is local, 200-900 GB, and deleted when the job ends.
+    STAGED_CACHE="${TMPDIR:?not set -- submit with qsub}/$(basename "$CACHE_DIR")"
+    echo "[stage] $CACHE_DIR ($(du -sh "$CACHE_DIR" | cut -f1)) -> $STAGED_CACHE"
+    SECONDS=0
+    cp -r "$CACHE_DIR" "$STAGED_CACHE"
+    echo "[stage] copied in ${SECONDS}s"
+
+    # One more config layer, last so it wins, points the run at the copy.
+    # ⚠️ So the run's config.yaml and provenance.json name a $TMPDIR path that
+    # is gone once the job ends. evaluate, predict and the session probe take
+    # the run's own configs and read the cache from RDS.
+    STAGE_CONFIG="$TMPDIR/staged_cache.yaml"
+    printf 'cache_dir: "%s"\n' "$STAGED_CACHE" > "$STAGE_CONFIG"
+
+    # --resume continues from last.ckpt, so a walltime kill just means
+    # resubmitting the same run rather than starting over.
+    uv run --frozen python -m pnpl2026.trial6.cli.train \
+        --config "${CONFIGS[@]}" "$STAGE_CONFIG" --resume
+} 2>&1 | tee "$LIVE_LOG"

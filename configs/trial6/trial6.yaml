@@ -1,0 +1,119 @@
+# Trial 6: Variant C, run as an ablation queue. THIS FILE IS C0 -- trial 5's
+# network and recipe exactly, capped at 20 epochs. Every run file in this
+# folder changes one thing against it; runs.txt lists them.
+#
+# Layer order:  base.yaml -> trial6/trial6.yaml -> trial6/hpc.yaml -> one run
+# file. model_kwargs merges KEY BY KEY across the layers (trial6/config.py),
+# so a run file carries only the knob it changes.
+#
+# ⚠️ Copied from configs/trial5.yaml rather than layered on it, so editing
+# trial 5 can never move trial 6's reference. See src/pnpl2026/trial6/info/
+# variant-c.md for what each run asks and where this departs from the design.
+
+# ⚠️ every run file overrides this; without one, runs land in runs/trial6/
+run_name: trial6
+
+model: trial6_net
+
+# -- data ------------------------------------------------------------------
+# 73, not 306: trial 1's whitened cache, as trial 5 read.
+n_channels: 73
+n_components: 73
+cache_dir: data/trial1_cache
+window_bounds: [-0.32, 1.28]
+
+# Word onset is sample 0 of this window -- checked against the holdout loader,
+# which serves exactly [0, 1] s from onset. W05 tries [0, 0.5] s.
+tmin: 0.0
+tmax: 1.0
+sfreq: 250
+
+model_kwargs:
+  # -- stream A, evoked: trial 5's fixed front end -----------------------------
+  decimate_factor: 5
+  lowpass_hz: 20.0
+  fir_taps: 81
+  baseline: [0.0, 0.1]
+  with_baseline: true
+  with_instance_norm: true
+
+  # -- stream B, band envelopes: OFF for C0. C4 and C5 each turn one band on ---
+  evoked_stream: true
+  envelope_bands: []
+  envelope_components: 32
+  envelope_lowpass_hz: 20.0
+  # Not in the design, which stops at the Hilbert amplitude: the log turns a
+  # session's gain drift into an offset. false is the literal design.
+  envelope_log: true
+
+  # -- spatial -----------------------------------------------------------------
+  spatial_width: 270
+  initial_linear: 512
+
+  # -- dilated conv trunk: unchanged. Reach 33 frames, 66% of the window -------
+  trunk_hidden: 160
+  trunk_depth: 5
+  trunk_kernel: 3
+  dilation_growth: 2
+  dilation_period: 4
+  glu_every: 2
+  trunk_dropout: 0.0
+
+  # -- flat transformer: depth 8 here; C1 tries 2, C2 tries 0 ------------------
+  d_model: 256
+  depth: 8
+  n_heads: 8
+  ffn_expansion: 4
+  dropout: 0.1
+  drop_path: 0.1
+  transformer_norm: layer
+
+  # -- pooling and heads -------------------------------------------------------
+  pooling: attention
+  head_dropout: 0.1
+
+# -- losses ----------------------------------------------------------------
+word_embeddings: data/word_embeddings_t5.npz
+centre_embeddings: true
+semantic_weight: 1.0
+closed_set_weight: 0.3
+session_adv_weight: 0.1
+session_adv_warmup_epochs: 5
+inference_semantic_weight: 0.5
+label_smoothing: 0.1
+class_weight_power: 0.5
+
+# ⚠️ false is trial 5's mean over every kept pair, which left the semantic term
+# near 0.015 of the loss. C7 flips it.
+siglip_sum_over_candidates: false
+
+# -- schedule --------------------------------------------------------------
+# ⚠️ Write the exponent with a decimal point: PyYAML is YAML 1.1 and loads
+# `3e-4` as the STRING "3e-4".
+lr: 3.0e-4
+min_lr: 1.0e-5
+warmup_fraction: 0.05
+weight_decay: 0.05
+ema_decay: 0.999
+
+# Trial 5's validation bAcc@10 was flat from epoch 16 and its validation loss
+# rose from epoch 22, so every Variant C run stops at 20. Checkpoint selection
+# is on val/bacc10, as before.
+max_epochs: 20
+batch_size: 128
+
+# -- augmentation ----------------------------------------------------------
+# All applied inside the model, after the instance norm -- see TimeMask in
+# models/frontend.py. R1 cuts the jitter to 0.03 and adds the noise.
+jitter_seconds: 0.1
+time_mask_spans: 2
+time_mask_width: 40
+component_dropout: 0.1
+gaussian_noise: 0.0
+
+# -- controls --------------------------------------------------------------
+shuffle_labels: false
+
+# Only read when stream B is on. ~800k frames at 50 per window, far more than
+# a 73x73 covariance needs.
+envelope_pca_windows: 16384

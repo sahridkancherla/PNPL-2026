@@ -1,0 +1,9 @@
+# C2 -- the same question, taken to the limit: no blocks, ~1.7M in total.
+# Adopt if within half a point of C0; if C1 and C2 tie, keep the smaller.
+#
+# ⚠️ The design assumes the trunk "already sees the whole 50-frame window". It
+# does not: dilations 1,2,4,8,1 reach 33 frames, 0.66 s. With no transformer,
+# only the attention pool integrates beyond that.
+run_name: trial6_c2
+model_kwargs:
+  depth: 0

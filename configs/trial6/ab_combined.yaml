@@ -1,0 +1,6 @@
+# Follow-up, NOT in runs.txt: stream A plus both envelope bands, 73 + 2 x 32 =
+# 137 components into the spatial map. Run it only after C4 or C5 has cleared
+# c0_shuffled, and delete whichever band did not.
+run_name: trial6_ab
+model_kwargs:
+  envelope_bands: [[20.0, 40.0], [40.0, 100.0]]

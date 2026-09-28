@@ -1,0 +1,7 @@
+# C7 -- does the semantic head help once it has gradient? SigLIP's own
+# normalisation: sum over candidates, mean over the batch. Adopt if above C0.
+#
+# ⚠️ Expect the semantic term to start near 10 and dominate the loss early,
+# against trial 5's ~0.015. That is the point of the run, not a bug.
+run_name: trial6_c7
+siglip_sum_over_candidates: true

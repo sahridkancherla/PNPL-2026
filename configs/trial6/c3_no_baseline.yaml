@@ -1,0 +1,6 @@
+# C3 -- is baselining removing signal? Adopt if above C0.
+# ⚠️ Trial 5 subtracted the 0-0.1 s level, not the 0-0.5 s the design assumes,
+# so this tests a smaller effect than the design expects.
+run_name: trial6_c3
+model_kwargs:
+  with_baseline: false

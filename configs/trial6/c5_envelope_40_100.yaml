@@ -1,0 +1,6 @@
+# C5 -- does the flat 40-100 Hz floor carry any? That envelope ALONE, as C4.
+# Adopt if clearly above c0_shuffled. The band is notched at 50 Hz already.
+run_name: trial6_c5
+model_kwargs:
+  evoked_stream: false
+  envelope_bands: [[40.0, 100.0]]

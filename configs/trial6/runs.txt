@@ -1,0 +1,11 @@
+configs/trial6/c0_reference.yaml
+configs/trial6/c0_shuffled.yaml
+configs/trial6/c1_depth2.yaml
+configs/trial6/c2_no_transformer.yaml
+configs/trial6/c3_no_baseline.yaml
+configs/trial6/c4_envelope_20_40.yaml
+configs/trial6/c5_envelope_40_100.yaml
+configs/trial6/c7_siglip_fixed.yaml
+configs/trial6/r1_regularise.yaml
+configs/trial6/w05_half_window.yaml
+configs/trial6/c6_lowpass_100.yaml

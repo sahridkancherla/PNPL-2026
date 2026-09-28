@@ -1,0 +1,24 @@
+# Trial 6 on CX3: the machine-shaped knobs only. Layered after trial6.yaml and
+# before the run file, so every run gets the same machine.
+#
+# Anything that changes the MODEL or the recipe belongs in trial6.yaml or a run
+# file, or an HPC run stops being comparable to a local one.
+
+# ⚠️ Must equal ncpus in pbs/trial6.pbs. A mismatch either starves the GPU or
+# wastes half the allocation.
+num_workers: 8
+
+# No thermal budget on a compute node: run flat out. These three are the
+# laptop throttle and must be off here.
+duty_cycle: 1.0
+cooldown_every_minutes: 0.0
+cooldown_seconds: 0.0
+
+# cuda, not auto: auto falls back to the CPU without a word when no GPU is
+# visible, and a CPU run quietly fills the whole walltime.
+accelerator: cuda
+
+# Trial 5's HPC batch and rate, so C0 is trial 5's run and not a relative.
+# ⚠️ lr is scaled with the batch: 4x the batch, 2x the lr (square-root scaling).
+batch_size: 512
+lr: 6.0e-4

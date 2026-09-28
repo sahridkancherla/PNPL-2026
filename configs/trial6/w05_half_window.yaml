@@ -1,0 +1,11 @@
+# W05 -- NOT in the design's table: its window row asks for 0.5, 1.0 and 1.5 s.
+# 1.0 s is C0. 1.5 s cannot be scored -- the holdout serves only [0, 1] s -- and
+# is past the cache's 1.28 s anyway. So this is [0, 0.5] s. If it ties C0, the
+# second half-second carries nothing the model uses.
+#
+# ⚠️ 25 frames, so the dilation ladder resets every 3 layers: 1,2,4,1,2, reach
+# 21. Trial 5's reach of 33 would overshoot and raise ReceptiveFieldError.
+run_name: trial6_w05
+tmax: 0.5
+model_kwargs:
+  dilation_period: 3

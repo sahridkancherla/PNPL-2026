@@ -1,0 +1,4 @@
+# C0 -- the reference. Trial 5's network and recipe, capped at 20 epochs. The
+# design calls it "B with EMA"; trial 5 already had the EMA, so nothing else
+# changes. Every other run is read against this one.
+run_name: trial6_c0

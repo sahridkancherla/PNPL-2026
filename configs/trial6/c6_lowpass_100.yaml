@@ -1,0 +1,11 @@
+# C6 -- the planned 100 Hz change, tested directly: stream A lowpassed at 100 Hz
+# and NOT decimated, so 250 frames instead of 50. Adopt if above C0 by enough
+# to justify 5x the sequence.
+#
+# ⚠️ The trunk is unchanged, so its 33-frame reach now spans 0.13 s, not 0.66 s.
+# ⚠️ By far the slowest and largest run. It is last in runs.txt so the array
+# can skip it; pbs/trial6.pbs gives its own submission line.
+run_name: trial6_c6
+model_kwargs:
+  lowpass_hz: 100.0
+  decimate_factor: 1
