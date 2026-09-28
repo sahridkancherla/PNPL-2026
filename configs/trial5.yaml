@@ -1,0 +1,120 @@
+# Trial 5, variant B: dilated conv trunk + flat transformer, PCA components.
+#
+# Only the lines that differ from base.yaml. See src/pnpl2026/trial5/ for what
+# each knob does; the parameter split is roughly:
+#
+#   front end + spatial      0.18M
+#   dilated conv trunk       0.83M
+#   FLAT TRANSFORMER         6.32M   <- 79%, and the whole point of the trial
+#   pooling + three heads    0.71M
+#                            ~8.0M
+#
+# Trial 2 scored 34.70% with 1.9M, of which ~0.6M was its sequence stage. The
+# reference model scores 73.23% with 203.7M, of which 98.8% is its transformer.
+# This is the first run that puts the capacity where the reference puts it.
+
+# ⚠️ without this a local run writes to runs/default/ and can overwrite
+# another trial's results. The HPC config overrides it again.
+run_name: trial5
+
+model: trial5_net
+
+# -- data ------------------------------------------------------------------
+# ⚠️ 73, not 306: this reads trial 1's whitened cache. VARIANT A (raw sensors
+# plus a learned ChannelMerger) needs the external drive and is not built.
+n_channels: 73
+n_components: 73
+cache_dir: data/trial1_cache
+window_bounds: [-0.32, 1.28]
+
+# The full scored window. The cached bounds are wider only so that time jitter
+# has somewhere to slide into.
+tmin: 0.0
+tmax: 1.0
+sfreq: 250
+
+model_kwargs:
+  # -- fixed front end -----------------------------------------------------
+  # 250 Hz / 5 = 50 Hz, matching the reference. 250 samples -> 50 frames.
+  # The 20 Hz cutoff sits below the post-decimation Nyquist of 25 Hz.
+  decimate_factor: 5
+  lowpass_hz: 20.0
+  fir_taps: 81
+
+  # ⚠️ NOT the reference's (0.0, 0.5). Their window opens at SENTENCE onset so
+  # its first half-second precedes most words; ours opens at WORD onset, where
+  # 0-0.5 s is the response itself. A pre-onset baseline is impossible because
+  # the holdout is served as pre-cut [0, 1] s windows. See frontend.py.
+  baseline: [0.0, 0.1]
+  with_baseline: true
+  with_instance_norm: true
+
+  # -- spatial, VARIANT B --------------------------------------------------
+  # 270 matches the reference's merger width, so variant A can replace this
+  # one stage without touching anything downstream.
+  spatial_width: 270
+  initial_linear: 512
+
+  # -- dilated conv trunk --------------------------------------------------
+  # ⚠️ dilation_period 4, not null. With growth 2 and depth 5 an unreset ladder
+  # runs 1,2,4,8,16 and reaches 63 frames -- past the 50-frame window, so the
+  # last layer convolves mostly with padding. Period 4 gives 1,2,4,8,1 and a
+  # reach of 33 frames, 66% of the window. The trunk raises if this is wrong.
+  trunk_hidden: 160
+  trunk_depth: 5
+  trunk_kernel: 3
+  dilation_growth: 2
+  dilation_period: 4
+  glu_every: 2
+  trunk_dropout: 0.0
+
+  # -- flat transformer ----------------------------------------------------
+  # One frame rate throughout. Trial 3's multi-rate pyramid scored 29.47% with
+  # 4.3M against trial 2's flat 34.70% with 1.9M; multi-rate saves compute on
+  # long sequences and there is nothing to save at 50 tokens.
+  d_model: 256
+  depth: 8
+  n_heads: 8
+  ffn_expansion: 4
+  dropout: 0.1
+  drop_path: 0.1
+  transformer_norm: layer
+
+  # -- pooling and heads ---------------------------------------------------
+  pooling: attention
+  head_dropout: 0.1
+
+# -- losses ----------------------------------------------------------------
+word_embeddings: data/word_embeddings_t5.npz
+centre_embeddings: true
+semantic_weight: 1.0
+closed_set_weight: 0.3
+session_adv_weight: 0.1
+session_adv_warmup_epochs: 5
+inference_semantic_weight: 0.5
+label_smoothing: 0.1
+class_weight_power: 0.5
+
+# -- schedule --------------------------------------------------------------
+# ⚠️ 3.0e-4 with warmup, not trial 3's flat 1e-4. Write the exponent with a
+# decimal point: PyYAML is YAML 1.1 and loads `3e-4` as the STRING "3e-4".
+lr: 3.0e-4
+min_lr: 1.0e-5
+warmup_fraction: 0.05
+weight_decay: 0.05
+ema_decay: 0.999
+max_epochs: 40
+batch_size: 128
+
+# -- augmentation ----------------------------------------------------------
+# ⚠️ Applied INSIDE the model, after the robust instance norm and after
+# decimation. Before the norm -- where it used to sit -- masked samples enter
+# the median and MAD the norm computes, inflating training amplitude by 26%
+# while holdout windows are untouched. See TimeMask in models/frontend.py.
+#
+# time_mask_width is in INPUT samples at 250 Hz and is converted to frames by
+# the model, so 40 here is 8 frames of 50.
+jitter_seconds: 0.1
+time_mask_spans: 2
+time_mask_width: 40
+component_dropout: 0.1

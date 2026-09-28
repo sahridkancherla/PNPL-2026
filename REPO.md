@@ -14,11 +14,12 @@ Keep this file current. A stale map is worse than none.
 | `README.md` | front door for humans. Short; points inward. |
 | `REPO.md` | this file — the map. |
 | `CLAUDE.md` | the competition, the data, and the working rules — including that **Claude never commits**. |
+| `handoff-docs/` | live handoff docs for long-running work. Not committed — local working notes. |
 | `LICENSE` | MIT. |
 | `.claude/` | Claude's configuration — rules, skills, settings. |
 | `src/pnpl2026/` | the package. Shared machinery at its root; one subpackage per trial. |
 | `configs/` | YAML run configs. `base.yaml` is defaults; a second file overrides it. |
-| `pbs/` | PBS job scripts for the Imperial HPC. `train.pbs`, `sweep.pbs`. |
+| `pbs/` | PBS job scripts for the Imperial HPC. `train.pbs`, `sweep.pbs`, `trial5.pbs`. |
 | `runs/` | checkpoints and per-run logs. Gitignored except `.gitkeep`. |
 | `logs/` | PBS job output and live logs. Gitignored except `.gitkeep`. |
 | `submissions/` | generated submission CSVs. Gitignored except `.gitkeep`. |
@@ -30,7 +31,7 @@ Keep this file current. A stale map is worse than none.
 ## Trials
 
 `src/pnpl2026/trial1/`, `trial2/`, … — one subpackage per complete attempt,
-each with its own `pipeline/`, `models/` and `cli/`. **Trials do not import from
+each with its own `data_processing/`, `models/`, `data/` and `cli/`. **Trials do not import from
 one another**; code is copied rather than shared, so a finished trial stays
 reproducible when the next changes the window, the rank or the sample rate.
 
@@ -46,5 +47,4 @@ place rather than inventing a second.
 | entry | for what |
 |---|---|
 | `tests/` | pytest suite. Nothing automated exists yet. |
-| `info/` | per-folder prose, `CONTEXT.md` first. Add one to a folder when it earns prose. |
 | `configs/sweep.txt` | one config path per line; read by `pbs/sweep.pbs`, which will fail without it. |

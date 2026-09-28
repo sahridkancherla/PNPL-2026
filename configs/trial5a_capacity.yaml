@@ -1,0 +1,36 @@
+# Trial 5a — the capacity probe. Layer AFTER configs/trial5.yaml.
+#
+# ⚠️ Read this before running the full trial5.yaml.
+#
+# trial5.yaml changes about a dozen things at once relative to trial 2's
+# 34.70%: 13x the sequence capacity, a new trunk, instance norm, baseline
+# correction, 50 Hz decimation, a SigLIP semantic head, a session adversary,
+# attention pooling, a weight EMA, warmup + cosine, and two augmentations.
+# If it lands at 30% we learn nothing about which of them did it.
+#
+# ⚠️ And we cannot resolve small differences anyway. The validation split's
+# rarest class has 48 examples, so per-class recall has SE ~7.2 points. Only
+# large moves are readable, which makes changing one thing at a time cheap
+# rather than expensive -- there is no point in a fine-grained sweep.
+#
+# This config turns off everything that is not the capacity question, so the
+# result is directly comparable to trial 2. It is the run to do first.
+
+run_name: trial5a_capacity
+
+# Closed-set cross-entropy only -- exactly trial 2's objective.
+semantic_weight: 0.0
+closed_set_weight: 1.0
+session_adv_weight: 0.0
+
+# ⚠️ Must be 0 when semantic_weight is 0, or the scored logits would come
+# partly from an untrained head. Trial5Config.__post_init__ enforces this.
+inference_semantic_weight: 0.0
+
+# The untested extras, off. Each goes back in one at a time afterwards.
+time_mask_spans: 0
+component_dropout: 0.0
+
+# If this beats 34.70% clearly, capacity was the lever and the next move is
+# more of it. If it does not, the whole premise needs revisiting before any
+# of the above is worth adding back.

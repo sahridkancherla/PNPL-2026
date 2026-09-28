@@ -65,8 +65,13 @@ def _coerce(name: str, value: Any, target: Any) -> Any:
     return value
 
 
-def load_config(*paths: str | Path) -> Config:
-    """Load YAML files left-to-right, later files overriding earlier ones."""
+def load_config(*paths: str | Path, config_class: type = Config) -> Config:
+    """Load YAML files left-to-right, later files overriding earlier ones.
+
+    `config_class` lets a trial load into its own Config subclass, so extra
+    fields validate and coerce the same way as the shared ones rather than
+    each trial reimplementing this.
+    """
     merged: dict[str, Any] = {}
     for p in paths:
         with open(p, "r", encoding="utf-8") as f:
@@ -74,10 +79,10 @@ def load_config(*paths: str | Path) -> Config:
 
     # `from __future__ import annotations` makes field.type a string, so
     # resolve the real types rather than comparing against 'float'.
-    types = get_type_hints(Config)
+    types = get_type_hints(config_class)
     unknown = set(merged) - set(types)
     if unknown:
         raise KeyError(f"Unknown config key(s): {sorted(unknown)}")
 
     coerced = {k: _coerce(k, v, types[k]) for k, v in merged.items()}
-    return Config(**coerced)
+    return config_class(**coerced)

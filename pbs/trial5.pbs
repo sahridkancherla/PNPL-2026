@@ -1,0 +1,40 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=64gb:ngpus=1:gpu_type=RTX6000
+#PBS -l walltime=08:00:00
+#PBS -N pnpl-trial5
+#PBS -j oe
+#PBS -o logs/
+
+# ⚠️ Verify gpu_type and the cpus/mem/walltime combination against Imperial's
+# current job-sizing table before the first submission. CX3 accepts only
+# combinations matching an allowed job class; anything else is rejected or
+# queues indefinitely with no explanation.
+#
+# ⚠️ num_workers in configs/trial5_hpc.yaml must match ncpus above. A mismatch
+# either starves the GPU or wastes half the allocation.
+#
+# ⚠️ The cache must already be on RDS. Compute nodes have no outbound internet,
+# so a job that tries to download hangs rather than fetching. Run
+# `cli.prepare` and the cache build from a LOGIN node.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+# Without this, python block-buffers stdout when it is not a terminal.
+export PYTHONUNBUFFERED=1
+
+# PBS spools stdout on the compute node's local disk and only copies it to
+# logs/ when the job exits, so the -o file cannot be tailed while running.
+# tee to RDS instead -- this file updates live:
+#     tail -f logs/<jobid>.live.log
+LIVE_LOG="logs/${PBS_JOBID%%.*}.live.log"
+echo "live log: $LIVE_LOG"
+
+# --resume continues from last.ckpt, so a walltime kill just means
+# resubmitting this same script rather than starting over.
+# pipefail is set above, so a python failure still fails the job through tee.
+uv run python -m pnpl2026.trial5.cli.train \
+    --config configs/base.yaml configs/trial5.yaml configs/trial5_hpc.yaml \
+    --resume 2>&1 | tee "$LIVE_LOG"

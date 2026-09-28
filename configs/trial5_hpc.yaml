@@ -1,0 +1,29 @@
+# Trial 5 on CX3: only what differs from configs/trial5.yaml.
+#
+# Layered third, so the architecture stays identical to a laptop run and only
+# the machine-shaped knobs move. Anything that changes the MODEL belongs in
+# trial5.yaml, or the HPC run stops being comparable to a local one.
+
+run_name: trial5_hpc
+
+# ⚠️ Must equal ncpus in pbs/trial5.pbs. A mismatch either starves the GPU or
+# wastes half the allocation.
+num_workers: 8
+
+# No thermal budget on a compute node: run flat out. These three are the
+# laptop throttle and must be off here.
+duty_cycle: 1.0
+cooldown_every_minutes: 0.0
+cooldown_seconds: 0.0
+accelerator: auto
+
+# A 24 GB RTX6000 holds far more than the laptop batch. 8.0M parameters at 50
+# frames is small; the DataLoader will be the limit, not memory.
+# ⚠️ lr is scaled with the batch: 4x the batch, 2x the lr (square-root scaling,
+# which is the safer of the two conventions for a model this size).
+batch_size: 512
+lr: 6.0e-4
+
+# Long enough to matter. Walltime is a kill, not a failure -- pbs/trial5.pbs
+# passes --resume, so an 8-hour overrun means resubmitting the same script.
+max_epochs: 60
