@@ -216,21 +216,50 @@ def build_cache(
     train_runs = [run for run in runs if run.session in train_sessions]
     val_runs = [run for run in runs if run.session not in train_sessions]
 
+    # --- AI, 2026-09-24: progress reporting on a job that runs for hours. ---
+    def announce(paths, label):
+        """Yield recordings while printing which one is being read.
+
+        ARGS:
+            paths (list): RunPaths to read, in order
+            label (str): the phase name, for the log line
+
+        RETURNS:
+            generator of [n_channels, n_times] recordings
+        """
+        #flushed, because this output is redirected to a log on a long job
+        for i, run in enumerate(paths, 1):
+            print(f"[cache] {label} {i}/{len(paths)} {run.key}", flush=True)
+            yield load_recording(run.meg_path)
+
+    print(f"[cache] {len(runs)} recordings, {len(train_runs)} of them training",
+          flush=True)
+    # --- end AI ---
+
     #both transforms are fitted on training recordings only, re-reading each
     standardiser = ChannelStandardiser.fit(
-        (load_recording(run.meg_path) for run in train_runs),
+        announce(train_runs, "standardiser fit"),
         scale_factor=STANDARDISER_SUBSAMPLE,
         seed=seed,
     )
     whitener = Whitener.fit(
-        (load_recording(run.meg_path) for run in train_runs),
+        announce(train_runs, "whitener fit"),
         standardiser,
         n_components=n_components,
     )
 
     shards, total_windows, clipped_fractions = [], 0, []
-    for run in runs:
+    for run_index, run in enumerate(runs, 1):
         onsets_s, labels = events_by_key[run.key]
+
+        # --- AI, 2026-09-24 ---
+        #the running window total is what says whether the build is on track
+        print(
+            f"[cache] shard {run_index}/{len(runs)} {run.key} "
+            f"({len(onsets_s)} words, {total_windows} windows so far)",
+            flush=True,
+        )
+        # --- end AI ---
 
         #standardise then whiten before cutting, so a window is already in the
         #73-component space and the shard is 4x smaller than a sensor-space one
