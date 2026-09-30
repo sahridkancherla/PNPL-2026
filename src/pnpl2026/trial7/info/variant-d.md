@@ -56,6 +56,69 @@ the previous words' windows contain this word's response. If D8 lands near D1,
 the model leans on neighbours' windows rather than its own — not necessarily
 on sequence priors.
 
+## Results
+
+All 33 runs complete (3 seeds each), from `runs/trial7_results.md` via
+`cli.collate`. Cells are mean ± SD of `val/bacc10` over seeds; chance is 0.20.
+
+| run | BAcc@10 | sentence | isolated | Δ vs D0 | rule | verdict |
+|---|---|---|---|---|---|---|
+| D9 shuffled | 0.205 ± 0.001 | 0.205 | 0.207 | — | — | chance line sits at the nominal 0.20: no pipeline bias |
+| D0 control, no context | 0.362 ± 0.002 | 0.364 | 0.344 | — | reference | a Variant B-style per-word model |
+| D2 no sentence transformer | 0.352 ± 0.003 | 0.354 | 0.331 | −0.010 | ≈ D0 | confirms D0's gain is not from its frame transformer |
+| **D1 full** | **0.460 ± 0.002** | **0.474** | **0.341** | **+0.098** | **> D0 + spread** | **adopt — clearly beats D0** |
+| D8 context only (own word masked) | 0.346 ± 0.003 | 0.361 | 0.204 | −0.016 | diagnostic | sentence words nearly match D0 from NEIGHBOURS alone; isolated collapses to chance, as it must |
+| D3 causal | 0.418 ± 0.002 | 0.426 | 0.337 | −0.042 vs D1 | diagnostic | later words are worth ~4 points; bidirectional beats causal |
+| D4 plain SigLIP (no dedup) | 0.467 ± 0.004 | 0.481 | 0.338 | +0.007 vs D1 | > D1 | marginal gain; the D in D-SigLIP is not earning its keep here |
+| D5a sentence depth 2 | 0.448 ± 0.002 | 0.461 | 0.338 | −0.012 vs D1 | size | smaller, slightly worse |
+| D5b sentence depth 8 | 0.464 ± 0.004 | 0.477 | 0.344 | +0.004 vs D1 | size | depth 4 (D1) is already near the plateau |
+| D6 no word-token masking | 0.465 ± 0.001 | 0.478 | 0.345 | +0.005 vs D1 | > D1 | masking did not help; tightest SD of the queue |
+| D7 dilation-32 trunk | 0.456 ± 0.009 | 0.471 | 0.323 | −0.004 vs D1 | ≈ D1 | no gain from a longer receptive field; ⚠️ one seed cut short, see below |
+
+**Adopt rule, as `cli.collate` computes it:** D1 − D0 = +0.098, against a
+largest seed SD of 0.002 for the two. That clears "beats D0 by more than the
+seed spread" by roughly 50×, the largest effect measured anywhere in this
+project.
+
+**The gain is exactly where it should be.** D1 against D0 moves `sentence`
+words by +11.0 points and leaves `isolated` words at +0.3 — noise, since
+isolated words have no neighbours for the sentence transformer to read. D2
+(no sentence transformer, same windows as D1) sits within 1 point of D0 on
+both splits, confirming the windows themselves are not the source of the gain.
+
+**D8 is the finding that needs the most care.** Predicting a sentence word
+from its NEIGHBOURS alone, with its own window hidden, scores 0.361 on
+sentence words — almost D0's 0.364, which uses the word's own window and
+nothing else. Two readings are both consistent with this and cannot be told
+apart from D8 alone:
+
+- the neighbours' windows physically overlap this word's brain response
+  (words are ~0.3 s apart, windows up to 3 s), so the model reads the
+  response through a neighbour's window rather than the word's own; or
+- the model has learned which words tend to follow which from the training
+  transcripts, and is predicting from word order.
+
+D3 (causal) bears on this a little: if D8's score were pure word-order
+learning, a causal mask should cost little, since English word order is
+mostly forward-predictable. It costs 4.2 points instead, which is more
+consistent with genuine overlapping brain signal than with a pure language
+model — but this is not conclusive either way.
+
+**The ablations (D4–D7) are all within the queue's own noise band**, roughly
+±0.01, except D3's causal mask. None is worth adopting alone; D4 and D6's
+small, same-direction gains (dedup off, masking off) are worth combining in
+one run together before trusting either individually.
+
+⚠️ **D7's third seed was cut short** (epoch 18, walltime, best at epoch 17),
+inflating its SD to 0.009 — the largest in the table. Rerun that line before
+reading D7 as a clean negative.
+
+**What this does not settle.** The 46.0% score depends on using MEG outside
+each word's own 1 s window, which is the exact thing CLAUDE.md flagged as
+unconfirmed by the rules (precondition 2, above). Until the organisers answer,
+`--window-only` is the only submittable mode, and it scores like the isolated
+split — about 34%, not 46%.
+
 ## Running it
 
 ```bash
