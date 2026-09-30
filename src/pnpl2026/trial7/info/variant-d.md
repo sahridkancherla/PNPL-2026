@@ -62,6 +62,7 @@ on sequence priors.
 qsub pbs/trial7_build.pbs            # once: data/trial7_continuous/, ~4.6 GB
 qsub -J 1-12 pbs/trial7.pbs          # D1, D0, D2, D9 -- the adopt decision
 qsub -J 13-33 pbs/trial7.pbs         # D8 and the ablations
+PYTHONPATH=src python -m pnpl2026.trial7.cli.collate   # any time: runs/trial7_results.md
 ```
 
 `cli.predict` has two modes. The default runs each holdout sentence whole.

@@ -16,7 +16,7 @@ nothing here imports from another trial.
 | `../losses.py` | SigLIP, deduplicated, normalised by N |
 | `../lit.py` | LightningModule — per-word losses, gradient probe, split metrics |
 | `../config.py` | `Trial7Config`, and the key-by-key `model_kwargs` loader |
-| `../cli/` | `build_continuous`, `train`, `predict` (two modes), `build_word_embeddings` |
+| `../cli/` | `build_continuous`, `train`, `collate` (every seed into one file), `predict` (two modes), `build_word_embeddings` |
 | `../../../../configs/trial7/` | `trial7.yaml` is D1; one file per run; `runs.txt` pairs runs with seeds |
 | `../../../../pbs/` | `trial7_build.pbs` once, then `trial7.pbs` as arrays |
 
