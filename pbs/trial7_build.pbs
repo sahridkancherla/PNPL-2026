@@ -1,0 +1,55 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=32gb
+#PBS -l walltime=02:00:00
+#PBS -N pnpl-trial7-build
+#PBS -j oe
+#PBS -o logs/
+
+# Build trial 7's continuous cache ONCE, before pbs/trial7.pbs: every subject-0
+# recording, whitened with trial 1's transforms, stored whole, ~4.6 GB, plus a
+# word table per recording. A CPU job -- it reads every h5 in full, which is
+# too heavy for a login node. No GPU.
+#
+#     qsub pbs/trial7_build.pbs
+#
+# Walltime: reading ~38 GB of h5 and one 73x306 matmul per sample is minutes,
+# not hours; 2 h is generous for an RDS-bound first run. A killed build resumes:
+# recordings already written are reused.
+#
+# ⚠️ Needs, on RDS, from a LOGIN node first:
+#     data/<task>/derivatives/...   the raw download, `uv run python -m pnpl2026.cli.prepare`
+#     data/trial1_cache/            for transforms.npz and manifest.json only
+#
+# ⚠️ Submit from the repo root. `-o logs/` is resolved against where qsub ran.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+export PYTHONUNBUFFERED=1
+# uv on a compute node must never try the network: offline, it fails at once.
+export UV_OFFLINE=1
+
+CONFIGS=(configs/base.yaml configs/trial7/trial7.yaml)
+
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.trial7_build.live.log"
+echo "live log: $LIVE_LOG"
+
+{
+    # The two inputs, checked before anything slow.
+    for needed in data/trial1_cache/transforms.npz data/trial1_cache/manifest.json; do
+        if [ ! -f "$needed" ]; then
+            echo "[build] missing $needed -- copy trial 1's cache up to RDS first" >&2
+            exit 1
+        fi
+    done
+    n_recordings=$(ls data/*/derivatives/serialised/sub-0_*_meg.h5 2>/dev/null | wc -l)
+    echo "[build] $n_recordings subject-0 recordings downloaded (trial 1 used 162)"
+    if [ "$n_recordings" -eq 0 ]; then
+        echo "[build] no recordings under data/ -- run cli.prepare on a login node" >&2
+        exit 1
+    fi
+
+    uv run --frozen python -m pnpl2026.trial7.cli.build_continuous --config "${CONFIGS[@]}"
+} 2>&1 | tee "$LIVE_LOG"

@@ -1,0 +1,6 @@
+# D2 -- D1 with no sentence transformer: how much comes from cross-word context?
+# val/bacc10_isolated should match D1's; only val/bacc10_sentence can move.
+run_name: trial7_d2
+model_kwargs:
+  sentence_depth: 0
+word_mask_p: 0.0

@@ -1,0 +1,9 @@
+# D0 -- the control: a per-word model with no cross-word context, like
+# Variant B, on the same holdout-matched windows and losses.
+# ⚠️ Frame transformer depth 2, not B's 8: trial 6's C1 scored the same at 41%
+# of the parameters, and 150 frames make depth 8 three times B's cost.
+run_name: trial7_d0
+model_kwargs:
+  frame_depth: 2
+  sentence_depth: 0
+word_mask_p: 0.0

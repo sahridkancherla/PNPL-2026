@@ -1,0 +1,4 @@
+# D5b -- D1's sentence transformer at depth 8.
+run_name: trial7_d5b
+model_kwargs:
+  sentence_depth: 8

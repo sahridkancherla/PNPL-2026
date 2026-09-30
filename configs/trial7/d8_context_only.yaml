@@ -1,0 +1,7 @@
+# D8 -- the honesty check: every word predicted with its OWN vector masked, in
+# training and in validation. What is left is the other words.
+# ⚠️ Not brain-free: words are ~0.3 s apart and windows up to 3 s, so the
+# previous words' windows contain this word's response. Read D8 as "without
+# this word's own window", not "without its brain response".
+run_name: trial7_d8
+mask_target: true

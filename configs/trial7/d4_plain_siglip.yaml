@@ -1,0 +1,4 @@
+# D4 -- D1 with plain SigLIP: repeated words stay in the loss, so a word's own
+# target is among its negatives. What the deduplication is worth.
+run_name: trial7_d4
+siglip_dedup: false

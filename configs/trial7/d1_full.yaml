@@ -1,0 +1,3 @@
+# D1 -- full Variant D, holdout-matched. The main result.
+# Adopt if it beats D0 by more than the seed spread on val bAcc@10.
+run_name: trial7_d1

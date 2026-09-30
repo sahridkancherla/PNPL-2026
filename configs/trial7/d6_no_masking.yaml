@@ -1,0 +1,3 @@
+# D6 -- D1 without word-token masking: does masking help or hurt?
+run_name: trial7_d6
+word_mask_p: 0.0

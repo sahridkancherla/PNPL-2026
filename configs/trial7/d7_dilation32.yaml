@@ -1,0 +1,5 @@
+# D7 -- D1 with a sixth trunk layer at dilation 32: reach 127 of 150 frames.
+# Does a longer receptive field help on 3 s windows?
+run_name: trial7_d7
+model_kwargs:
+  trunk_depth: 6

@@ -1,0 +1,5 @@
+# D3 -- D1 with a causal sentence transformer: what later words are worth, in
+# case the rules allow context but only from before.
+run_name: trial7_d3
+model_kwargs:
+  causal: true

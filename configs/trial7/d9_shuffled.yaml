@@ -1,0 +1,3 @@
+# D9 -- D1 with its TRAINING labels shuffled: the chance line.
+run_name: trial7_d9
+shuffle_labels: true
