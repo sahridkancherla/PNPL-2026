@@ -1,0 +1,117 @@
+# Trial 8: trial 7's D1 with plain SigLIP and no word-token masking, plus ONE
+# new knob -- the attention reach of each sentence block. Every run file in
+# this folder sets only `sentence_reach`; runs.txt lists them with seeds.
+#
+# Layer order:  base.yaml -> trial8/trial8.yaml -> trial8/hpc.yaml -> one run
+# file. model_kwargs merges key by key (trial8/config.py).
+#
+# Everything else is trial 7's D1 file, unchanged. See
+# src/pnpl2026/trial8/info/reach.md for the design and the queue.
+
+# ⚠️ every run file overrides this
+run_name: trial8
+
+model: trial8_net
+
+# -- data ------------------------------------------------------------------
+# Trial 1's 73 whitened components, stored whole by trial 7's
+# cli.build_continuous. Trial 8 has no builder: it reads trial 7's cache.
+n_channels: 73
+n_components: 73
+continuous_dir: data/trial7_continuous
+
+# Windows start at word onset and run up to 3 s -- stopped earlier by the end
+# of their sentence, as in the holdout.
+tmin: 0.0
+tmax: 3.0
+sfreq: 250
+
+# -- holdout matching (measured on subject 0's holdout, 2026-09-30) ----------
+# 1-9 scored words per sentence; the MEG stops 1.13-1.68 s after the last one
+# (5th-95th percentile); 92 of 960 words stand alone with a 1 s window.
+max_tokens: 9
+tail_seconds: [1.1, 1.7]
+isolated_fraction: 0.096
+isolated_seconds: 1.0
+
+model_kwargs:
+  # -- per-word encoder: Variant B's front end and trunk ----------------------
+  lowpass_hz: 20.0
+  fir_taps: 81
+  decimate_factor: 5
+  # The design's 0-0.5 s. Trial 6's C3 found no baseline +1.2 on B's 0-0.1 s.
+  baseline: [0.0, 0.5]
+  with_baseline: true
+  with_instance_norm: true
+  spatial_width: 270
+  initial_linear: 512
+  trunk_hidden: 160
+  trunk_depth: 5
+  trunk_kernel: 3
+  dilation_growth: 2
+  # null never resets the ladder: 1,2,4,8,16, reach 63 frames. It overshot
+  # B's 50 frames; it fits 150. D7 adds a sixth layer at 32.
+  dilation_period: null
+  glu_every: 2
+  trunk_dropout: 0.0
+  # No transformer over FRAMES: its final norm and the amplitude bias only.
+  frame_depth: 0
+  pooling: attention
+
+  # -- shared by both transformers --------------------------------------------
+  d_model: 256
+  n_heads: 8
+  ffn_expansion: 4
+  dropout: 0.1
+  drop_path: 0.1
+  transformer_norm: layer
+
+  # -- the sentence transformer, across words -----------------------------------
+  sentence_depth: 4
+  causal: false
+  # One entry per block: how many words either side a word may read, or null
+  # for the whole sentence. null throughout is trial 7's full attention (E0).
+  # A mask, not a weight -- every schedule has D1's 4.44M parameters.
+  sentence_reach: [null, null, null, null]
+  head_dropout: 0.1
+
+# -- losses ----------------------------------------------------------------
+word_embeddings: data/word_embeddings_t5.npz
+centre_embeddings: true
+semantic_weight: 1.0
+closed_set_weight: 1.0
+inference_semantic_weight: 0.5
+label_smoothing: 0.1
+class_weight_power: 0.5
+
+# Plain SigLIP, as trial 7's D4: repeated words stay in the loss. D4 scored
+# 0.467 against D1's 0.460 with deduplication on.
+siglip_dedup: false
+
+# Off, as trial 7's D6 (+0.005 over D1). Under a reach of 1 a masked
+# neighbour removes half of a word's context in that block, which would
+# confound the reach comparison.
+word_mask_p: 0.0
+mask_target: false
+
+# -- schedule --------------------------------------------------------------
+# ⚠️ Exponents with a decimal point: PyYAML loads `1e-4` as a STRING.
+lr: 1.0e-4
+min_lr: 1.0e-6
+warmup_fraction: 0.05
+weight_decay: 0.05
+ema_decay: 0.999
+max_epochs: 50
+patience: 10
+
+# SEQUENCES per batch, ~300 words -- the same on the laptop and the HPC.
+batch_size: 64
+
+# -- augmentation ----------------------------------------------------------
+jitter_seconds: 0.03
+component_dropout: 0.1
+gaussian_noise: 0.1
+
+# -- controls and diagnostics ----------------------------------------------
+shuffle_labels: false
+grad_probe_every: 50

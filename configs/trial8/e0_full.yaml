@@ -1,0 +1,7 @@
+# E0 -- the control: full attention in every block. Trial 7's D1 with plain
+# SigLIP and no masking, rerun in trial 8's code so every run below differs
+# from it in the reach alone.
+run_name: trial8_e0
+
+model_kwargs:
+  sentence_reach: [null, null, null, null]

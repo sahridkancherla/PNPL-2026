@@ -1,0 +1,6 @@
+# E1 -- neighbours first, then the whole sentence. Two blocks at reach 1 give
+# each word a summary of its +/-2 neighbourhood; the last two read everything.
+run_name: trial8_e1
+
+model_kwargs:
+  sentence_reach: [1, 1, null, null]

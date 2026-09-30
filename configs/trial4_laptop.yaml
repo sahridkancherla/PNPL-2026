@@ -1,0 +1,32 @@
+# Trial 4 on the M3 Pro laptop, with a thermal budget.
+# Layer on top of base.yaml AND trial4.yaml:
+#   --config configs/base.yaml configs/trial4.yaml configs/trial4_laptop.yaml
+
+run_name: trial4_laptop
+
+# ⚠️ Never "cpu" to run cooler. CPU measured 51x slower on this machine, so a
+# 12 h epoch holds the chassis hot far longer than a paced 40 min one.
+accelerator: auto
+
+# Leaves 2 of 6 performance cores for the rest of the machine.
+torch_threads: 4
+
+# ⚠️ THE ONLY REAL LEVER. Apple Silicon exposes no way to cap GPU utilisation,
+# so heat is bounded by idling between steps. 0.25 = 25% computing, and it IS
+# 4x the wall-clock -- thermal safety on a laptop is paid for in time.
+# Moderate on purpose: 0.25 is what configs/laptop.yaml uses for unattended
+# overnight runs, and trial 3 ran at 0.18.
+duty_cycle: 0.25
+
+# Short inter-batch gaps do not let the chassis shed heat. This does.
+cooldown_every_minutes: 10
+cooldown_seconds: 90
+
+# ⚠️ 96 rather than trial4.yaml's 128, and the contrastive loss is the reason to
+# think twice: D-SigLIP compares every pair in the batch, so a smaller batch is
+# a weaker loss as well as a cooler one. 96 still gives 9,120 pairs per step.
+batch_size: 96
+
+# ⚠️ 8 workers cut idle waiting, which RAISED sustained GPU duty from 17% to 21%
+# and ran the machine hot. Fewer readers means more waiting, and waiting is cool.
+num_workers: 4

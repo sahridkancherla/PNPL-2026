@@ -1,0 +1,12 @@
+configs/trial8/e0_full.yaml 0
+configs/trial8/e0_full.yaml 1
+configs/trial8/e0_full.yaml 2
+configs/trial8/e1_local_then_full.yaml 0
+configs/trial8/e1_local_then_full.yaml 1
+configs/trial8/e1_local_then_full.yaml 2
+configs/trial8/e2_full_then_local.yaml 0
+configs/trial8/e2_full_then_local.yaml 1
+configs/trial8/e2_full_then_local.yaml 2
+configs/trial8/e3_local_only.yaml 0
+configs/trial8/e3_local_only.yaml 1
+configs/trial8/e3_local_only.yaml 2

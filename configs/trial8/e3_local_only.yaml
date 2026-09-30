@@ -1,0 +1,7 @@
+# E3 -- neighbours only. After four blocks at reach 1 a word has read at most
+# 4 words either side, so the ends of a 9-word sentence never meet. Does
+# anything beyond +/-4 words matter?
+run_name: trial8_e3
+
+model_kwargs:
+  sentence_reach: [1, 1, 1, 1]

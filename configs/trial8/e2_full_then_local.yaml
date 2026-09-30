@@ -1,0 +1,6 @@
+# E2 -- the whole sentence first, then neighbours. The same blocks as E1 in
+# the opposite order: does local refinement after global context help?
+run_name: trial8_e2
+
+model_kwargs:
+  sentence_reach: [null, null, 1, 1]

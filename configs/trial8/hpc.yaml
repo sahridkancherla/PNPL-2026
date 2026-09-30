@@ -1,0 +1,14 @@
+# Trial 8 on CX3: the machine-shaped knobs only. Layered after trial8.yaml and
+# before the run file, so every run gets the same machine.
+
+# ⚠️ Must equal ncpus in pbs/trial8.pbs.
+num_workers: 8
+
+# No thermal budget on a compute node: run flat out.
+duty_cycle: 1.0
+cooldown_every_minutes: 0.0
+cooldown_seconds: 0.0
+
+# cuda, not auto: auto falls back to the CPU without a word when no GPU is
+# visible, and a CPU run quietly fills the whole walltime.
+accelerator: cuda

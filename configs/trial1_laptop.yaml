@@ -1,0 +1,51 @@
+# Trial 1 on the laptop, with a thermal budget.
+# Layer on top of base.yaml AND trial1.yaml:
+#   --config configs/base.yaml configs/trial1.yaml configs/trial1_laptop.yaml
+#
+# WRITTEN BY AI -- 2026-09-24, unverified over a long run.
+#
+# Measured on an M3 Pro (18 GB), 2026-09-24:
+#   MPS, d=192 n_blocks=4, batch 128  ->  0.401 s/step  ->  14.7 min/epoch
+#   CPU, same config                  -> 20.5   s/step  ->  12.5  h/epoch  (51x slower)
+# The loader is not the bottleneck: 28 us per window, hidden behind compute.
+
+run_name: trial1_laptop
+
+# ⚠️ CPU is 51x slower here. "auto" picks MPS on Apple Silicon; only set this
+# to "cpu" if MPS produces wrong numbers, never to run cooler -- a 12.5 h epoch
+# holds the machine hot far longer than a paced 25 min one.
+accelerator: auto
+
+# Leaves 2 of 6 performance cores for the rest of the machine. The GPU does the
+# training; these threads only feed it.
+torch_threads: 4
+
+# ⚠️ THE ONLY REAL LEVER. Apple Silicon exposes no way to cap GPU utilisation,
+# so heat is bounded by idling between steps. 0.5 = half computing, half idle,
+# and exactly 2x the wall-clock.
+# Measured at batch 96: ~0.19 s of compute per step, so 0.38 s wall -> ~18 min
+# per epoch plus ~2 min validation.
+# Drop to 0.4 if the fans still run hard. The callback halves this on its own
+# whenever macOS reports it is already throttling the CPU.
+duty_cycle: 0.3
+
+# Short inter-batch gaps do not let the chassis actually shed heat. This does.
+cooldown_every_minutes: 10
+cooldown_seconds: 90
+
+# Smaller batches finish sooner and leave more gaps, at some GPU efficiency.
+batch_size: 96
+
+# Early stopping ends the run well before 50 epochs; at duty 0.6 that is
+# ~25 min each, so budget ~8-12 h for a realistic 20-30 epoch run.
+max_epochs: 50
+patience: 8
+
+# Measured at 4 workers: 59% of each epoch was spent WAITING on data while the
+# GPU sat idle (compute was only 17%). Random reads across a 17 GB cache on an
+# 18 GB machine miss the page cache constantly, so more readers in flight is
+# the fix. 8 leaves 4 cores for torch_threads.
+# Reverted 8 -> 4 on 2026-09-24: 8 workers cut idle waiting, which RAISED
+# sustained GPU duty from 17% to 21% of wall-clock and ran the machine hot.
+# Fewer readers means more waiting, and waiting is cool.
+num_workers: 4

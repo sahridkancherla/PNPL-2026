@@ -1,0 +1,103 @@
+# Trial 4: a multi-rate Conformer with a semantic head.
+#
+# Only the lines that DIFFER from base.yaml belong here.
+# The design and the evidence behind every choice: handoff-docs/trial4-design.md
+#
+# ⚠️ Reads TRIAL 1's cache. The design calls for raw 306 sensors and a learned
+# spatial front end; that needs the continuous recordings, which live on an
+# external drive that is not always mounted. 73 whitened components is the
+# compromise, and it is the one thing here that is not the intended design.
+
+run_name: trial4
+
+# ⚠️ The model is fed 73 whitened components, not the 306 sensors. These two
+# must agree; Trial4Config raises if they do not.
+n_channels: 73
+n_components: 73
+
+# ⚠️ Trial 1's cache, deliberately. Identical whitener, rank and bounds, so the
+# comparison against trials 1-3 is about the model and nothing else.
+cache_dir: data/trial1_cache
+window_bounds: [-0.32, 1.28]
+clip_sigma: 20.0
+
+# The FULL scored window. Trial 3 narrowed this to 0.2-0.6 s on the tutorial's
+# authority and plateaued at 27.6%; trial 2 used the full second and reached
+# 34.7%. Until that is attributed, take the wider one.
+tmin: 0.0
+tmax: 1.0
+
+model: trial4_net
+model_kwargs:
+  # --- the fixed front end ---
+  # 45 Hz lowpass then decimate by 2: 250 Hz -> 125 Hz, so a 1 s window is 125
+  # frames. ⚠️ 45 Hz is under the post-decimation Nyquist of 62.5 Hz, so nothing
+  # aliases. CLAUDE.md records 9.97% of power above 62.5 Hz, which is what would
+  # otherwise fold down on top of real signal.
+  lowpass_hz: 45.0
+  fir_taps: 81
+  decimate_factor: 2
+  with_instance_norm: true    # false is the ablation, and reverts to the cache's stats
+
+  # --- the encoder: a downward PYRAMID, not a U-Net ---
+  # 125 / 63 / 32 frames. Kernels shrink as the rate drops so each spans ~250 ms;
+  # a constant kernel across a rate change quadruples the receptive field.
+  #
+  # ⚠️ NO upsample and NO skip. Zipformer climbs back up because ASR emits a
+  # label per frame -- dense prediction, where the skip restores the resolution
+  # the bottleneck discarded. This model POOLS over time and emits 50 logits, so
+  # there is no output resolution to reconstruct. The U-Net shape measured 12%
+  # more encoder compute for a mechanism this task does not use.
+  # The ablation is `stack_divisors: [1, 2, 4, 2]` with a 4th width and kernel.
+  stack_blocks:   [2, 3, 4]
+  stack_widths:   [144, 192, 256]
+  stack_divisors: [1, 2, 4]
+  stack_kernels:  [31, 15, 9]
+  n_heads: 4
+  ffn_expansion: 4
+  dropout: 0.1
+  drop_path: 0.1              # ramped with depth inside the encoder
+  with_quadrature: true       # trial 1's envelope branch. false is the ablation
+  reuse_attention: true       # Zipformer's weight sharing; halves attention cost
+  pooling: attention
+  # Pool EVERY stack and concatenate (144+192+256 = 592). This is what replaces
+  # the U-Net skip: the head still sees fine and coarse evidence together, and
+  # pooling is a softmax and a weighted sum, so it is free.
+  multi_scale_pool: true
+  head_dropout: 0.1
+
+# --- the three losses ---
+# The semantic head is the bet: it is what the 73.23% reference model trains on.
+semantic_weight: 1.0
+closed_set_weight: 0.3
+session_adv_weight: 0.1
+session_adv_warmup_epochs: 5
+centre_embeddings: true
+label_smoothing: 0.1
+
+# ⚠️ A GUESS, and the run logs val/bacc10_closed and val/bacc10_semantic
+# separately so it can be replaced with a measurement after the first few epochs.
+inference_semantic_weight: 0.5
+
+# --- optimisation ---
+# ⚠️ 3e-4, not the 1e-4 trials 1-3 used. Trial 3's own Deferred list named this
+# as the leading suspect for its flat curve. Warmup is what makes it safe.
+lr: 3.0e-4
+weight_decay: 0.05
+warmup_fraction: 0.05
+min_lr: 1.0e-5
+ema_decay: 0.999
+
+batch_size: 128
+max_epochs: 30
+patience: 8
+
+# --- augmentation ---
+jitter_seconds: 0.1
+time_mask_spans: 2
+time_mask_width: 40          # 0.16 s at 250 Hz, before decimation
+component_dropout: 0.1
+
+# 0.0 unweighted, 0.5 sqrt-inverse, 1.0 full inverse. 0.5 is what the 2025
+# phoneme winner used, where it was worth +7.6%.
+class_weight_power: 0.5

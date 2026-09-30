@@ -16,8 +16,9 @@ import torch
 
 from ..config import load_trial5_config
 from ..data import Trial5DataModule
-from ..evaluate import report
+from ..evaluate import per_session_report, report
 from ..lit import LitTrialFive
+from ...metrics import balanced_topk_accuracy
 from ..losses import semantic_logits
 
 
@@ -57,11 +58,13 @@ def main():
         print("[eval] using the averaged (EMA) weights")
     model.eval()
 
-    closed, semantic, targets = [], [], []
+    closed, semantic, targets, sessions = [], [], [], []
     logit_scale = model.log_scale.exp()
 
-    #the val loader is never shuffled, so predictions and labels stay aligned
-    for windows, labels, _sessions in datamodule.val_dataloader():
+    #⚠️ the session ids are kept, not discarded. The competition holdout is ONE
+    #unseen recording, so how the score varies BETWEEN recordings matters more
+    #than the pooled average over eighteen of them
+    for windows, labels, batch_sessions in datamodule.val_dataloader():
         out = model(windows)
         closed.append(out["logits"])
         semantic.append(
@@ -70,6 +73,7 @@ def main():
             else torch.zeros_like(out["logits"])
         )
         targets.append(labels)
+        sessions.extend(batch_sessions.tolist())
 
     closed = torch.cat(closed)
     semantic = torch.cat(semantic)
@@ -85,6 +89,36 @@ def main():
         cfg.metric_k,
         cfg.n_classes,
         f"blend at inference_semantic_weight={cfg.inference_semantic_weight}",
+    )
+
+    #⚠️ the blend weight in the config is a GUESS. Sweeping it costs one pass
+    #over tensors already in memory, and the run is scored on whichever wins
+    if model.uses_semantic:
+        print("\n=== inference_semantic_weight sweep ===")
+        print(f"{'weight':>8}{'BAcc@'+str(cfg.metric_k):>12}")
+        original = cfg.inference_semantic_weight
+        best = (None, -1.0)
+        for weight in [round(0.1 * i, 1) for i in range(11)]:
+            cfg.inference_semantic_weight = weight
+            score = balanced_topk_accuracy(
+                model._blend(closed, semantic), targets, cfg.metric_k, cfg.n_classes
+            )
+            marker = "  <-- config" if abs(weight - original) < 1e-9 else ""
+            print(f"{weight:>8.1f}{score:>12.4f}{marker}")
+            if score > best[1]:
+                best = (weight, score)
+        cfg.inference_semantic_weight = original
+        print(f"\n  best {best[1]:.4f} at inference_semantic_weight={best[0]} "
+              f"(config has {original})")
+
+    #the per-recording table LAST, on the blend the config actually ships
+    per_session_report(
+        model._blend(closed, semantic),
+        targets,
+        sessions,
+        cfg.metric_k,
+        cfg.n_classes,
+        "blend",
     )
 
 

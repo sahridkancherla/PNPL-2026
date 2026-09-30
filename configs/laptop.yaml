@@ -1,0 +1,38 @@
+# Thermal and hardware budget for the M3 Pro laptop. MACHINE-specific, not
+# trial-specific -- deliberately carries NO run_name, so it can be layered on
+# top of any trial config without hijacking where that run writes.
+#
+#   --config configs/base.yaml configs/<trial>.yaml configs/laptop.yaml
+#
+# WRITTEN BY AI -- 2026-09-24.
+#
+# Measured on an M3 Pro (18 GB), 2026-09-24, trial 1 at d=192:
+#   MPS  0.19 s/step at batch 96   |   CPU 20.5 s/step  (51x slower)
+#   Epoch: 28.5 min at duty 0.3, of which only ~6 min is GPU compute.
+
+# ⚠️ Never set this to "cpu" to run cooler. CPU is 51x slower here, so a
+# 12.5 h epoch holds the machine hot far longer than a paced 28 min one.
+accelerator: auto
+
+# Leaves 2 of 6 performance cores for the rest of the machine.
+torch_threads: 4
+
+# ⚠️ THE ONLY REAL LEVER. Apple Silicon exposes no way to cap GPU utilisation,
+# so heat is bounded by idling between steps. 0.3 = 30% computing.
+# ⚠️ The callback's automatic backoff reads `pmset -g therm`, which only
+# records once macOS actually clamps clock speeds -- long after the fans are
+# audible. It has never fired. Treat it as a last resort, not a safety net.
+# ⚠️ 0.25 for UNATTENDED overnight runs -- lighter than the 0.3 that ran fine
+# while someone was listening to the fans. Costs ~4 min/epoch against 0.3.
+duty_cycle: 0.25
+
+# Short inter-batch gaps do not let the chassis shed heat. This does.
+cooldown_every_minutes: 10
+cooldown_seconds: 90
+
+batch_size: 96
+
+# ⚠️ 8 workers cut idle waiting, which RAISED sustained GPU duty from 17% to
+# 21% and ran the machine hot. Fewer readers means more waiting, and waiting
+# is cool. Do not raise this to chase throughput.
+num_workers: 4
