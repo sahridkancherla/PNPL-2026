@@ -26,6 +26,33 @@ Small differences are noise. Per-class recall on the rarest validation class
 has an SE of ~7 points (48 examples), and every run prints its own figure on a
 `[data] rarest validation class` line at the start.
 
+## Results — 2026-09-29
+
+Best `val/bacc10` per run, one seed each. Δ is against C0, in points.
+
+| run | BAcc@10 | Δ | rule | verdict |
+|---|---|---|---|---|
+| C0 | 0.351 | — | — | reference |
+| shuffled | 0.204 | −14.7 | — | chance line sits at the nominal 0.20: no pipeline bias |
+| C1 depth 2 | 0.355 | +0.4 | ≥ C0 | **adopt** — the same score with 41% of the parameters |
+| C2 no transformer | 0.337 | −1.4 | within 0.5 | fails; C1 is the smaller model that ties |
+| C3 no baseline | 0.363 | +1.2 | > C0 | **adopt**, the weakest of the adopts |
+| C4 20–40 Hz alone | 0.204 | 0.0 over shuffled | clearly > null | **drop** — at chance exactly |
+| C5 40–100 Hz alone | 0.224 | +2.0 over shuffled | clearly > null | small signal; only worth keeping if it adds to stream A |
+| C7 SigLIP fixed | 0.351 | 0.0 | > C0 | not adopted; the per-head columns are unread |
+| R1 regularise | 0.356 | +0.5 | > C0 | a tie |
+| W05 0.5 s | 0.316 | −3.5 | ties → no | **keep 1 s** — the second half-second carries signal |
+| C6 100 Hz | 0.341 | −1.0 | > C0, and by a lot | **reject** — worse, at 5x the cost |
+
+⚠️ One seed per run, and seed-to-seed spread is unmeasured. Validation
+sampling alone is roughly ±0.5 point per run (a rough estimate), so C3's +1.2
+and C2's −1.4 are two or three SE, not certainties. W05 and C4 are the clear
+results.
+
+The 100 Hz question is settled against: raw high frequency (C6) hurt, the
+20–40 Hz envelope carries nothing alone, and 40–100 Hz carries 2 points above
+chance against stream A's 15.
+
 ## Running it
 
 ```bash
