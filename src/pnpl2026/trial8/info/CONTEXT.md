@@ -8,7 +8,8 @@ reads trial 7's continuous cache and has no builder of its own.
 
 | where | what |
 |---|---|
-| `reach.md` | **start here** — the idea, the queue, parameters, what was checked |
+| `variant-e.md` | **start here** — the queue, the results, what to take forward |
+| `reach.md` | the idea, parameters, what was checked |
 | `architecture.md` | the network drawn end to end, the masks, how reach compounds |
 | `../models/` | the network. Its own `info/CONTEXT.md` |
 | `../data/` | unchanged from trial 7: holdout-shaped sequences, flat token batches |
