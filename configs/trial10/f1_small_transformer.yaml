@@ -1,0 +1,9 @@
+# F1 -- the sentence transformer at trial 8's size, 4 x 256 x 8 heads (3.2M
+# instead of 201.5M). A linear map takes its output to the t5 width. Everything
+# else is F0. How much of the reference is capacity?
+run_name: trial10_f1
+
+model_kwargs:
+  d_model: 256
+  sentence_depth: 4
+  n_heads: 8

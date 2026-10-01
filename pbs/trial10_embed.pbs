@@ -1,0 +1,60 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=32gb
+#PBS -l walltime=02:00:00
+#PBS -N pnpl-trial10-embed
+#PBS -j oe
+#PBS -o logs/
+
+# Encode every word in trial 10's reference cache with t5-large (middle layer,
+# each word alone) -> data/word_embeddings_t5_all.npz. Run ONCE, after
+# pbs/trial10_build.pbs and before pbs/trial10.pbs. A CPU job: tens of
+# thousands of words, a few tokens each.
+#
+#     qsub pbs/trial10_embed.pbs
+#
+# ⚠️ Needs, from a LOGIN node first (outbound internet), two things this job
+# cannot fetch:
+#
+#   1. transformers + sentencepiece, installed ASIDE from the project venv so
+#      the lockfile and torch never move:
+#        uv pip install --python .venv/bin/python --target "$HOME/t5libs" \
+#            transformers sentencepiece
+#
+#   2. t5-large's files in the Hugging Face cache (weights only, ~3 GB):
+#        PYTHONPATH="$HOME/t5libs" .venv/bin/python -c "from huggingface_hub \
+#            import snapshot_download; snapshot_download('t5-large', \
+#            allow_patterns=['*.json', '*.model', '*.safetensors'])"
+#
+# ⚠️ Submit from the repo root. `-o logs/` is resolved against where qsub ran.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+# t5libs first: transformers lives there and nowhere else.
+export PYTHONPATH="$HOME/t5libs:$PWD/src"
+export PYTHONUNBUFFERED=1
+export UV_OFFLINE=1
+# Offline: a compute node has no internet, so a cache miss must fail at once
+# rather than hang on a download.
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+# One thread per core this job was given.
+export OMP_NUM_THREADS=8
+
+CONFIGS=(configs/base.yaml configs/trial10/trial10.yaml)
+
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.trial10_embed.live.log"
+echo "live log: $LIVE_LOG"
+
+{
+    if [ ! -f data/trial10_reference/manifest.json ]; then
+        echo "[embed] no reference cache -- run pbs/trial10_build.pbs first" >&2
+        exit 1
+    fi
+
+    # The project venv's python directly: `uv run` re-syncs the environment
+    # first, and nothing here should touch it.
+    .venv/bin/python -m pnpl2026.trial10.cli.build_word_embeddings \
+        --config "${CONFIGS[@]}" --device cpu
+} 2>&1 | tee "$LIVE_LOG"

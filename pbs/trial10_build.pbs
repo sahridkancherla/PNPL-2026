@@ -1,0 +1,50 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=32gb
+#PBS -l walltime=03:00:00
+#PBS -N pnpl-trial10-build
+#PBS -j oe
+#PBS -o logs/
+
+# Build trial 10's reference cache ONCE, before pbs/trial10_embed.pbs and
+# pbs/trial10.pbs: every subject-0 recording of all three pnpl partitions,
+# 306 sensors resampled to 50 Hz and robust-scaled per recording, ~4 GB, plus
+# a word table per recording, sensor positions and F3's PCA. A CPU job -- it
+# reads every h5 in full, too heavy for a login node. No GPU.
+#
+#     qsub pbs/trial10_build.pbs
+#
+# Walltime: ~38 GB of h5 to read and one polyphase resample per recording;
+# trial 7's comparable build ran well inside 2 h. A killed build resumes:
+# recordings already written are reused.
+#
+# ⚠️ Needs, on RDS, from a LOGIN node first (outbound internet):
+#     uv run python -m pnpl2026.cli.prepare                                         train, 156
+#     uv run python -m pnpl2026.cli.prepare --partition validation --subjects deep  3
+#     uv run python -m pnpl2026.cli.prepare --partition test --subjects deep        3
+#
+# ⚠️ Submit from the repo root. `-o logs/` is resolved against where qsub ran.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+export PYTHONUNBUFFERED=1
+# uv on a compute node must never try the network: offline, it fails at once.
+export UV_OFFLINE=1
+
+CONFIGS=(configs/base.yaml configs/trial10/trial10.yaml)
+
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.trial10_build.live.log"
+echo "live log: $LIVE_LOG"
+
+{
+    n_recordings=$(ls data/*/derivatives/serialised/sub-0_*_meg.h5 2>/dev/null | wc -l)
+    echo "[build] $n_recordings subject-0 recordings downloaded (162 = train 156 + validation 3 + test 3)"
+    if [ "$n_recordings" -eq 0 ]; then
+        echo "[build] no recordings under data/ -- run cli.prepare on a login node" >&2
+        exit 1
+    fi
+
+    uv run --frozen python -m pnpl2026.trial10.cli.build_reference --config "${CONFIGS[@]}"
+} 2>&1 | tee "$LIVE_LOG"

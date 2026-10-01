@@ -1,0 +1,3 @@
+# F0 -- the reference, unchanged: trial10.yaml as it stands. Does the
+# reproduction reach the paper's 73.23% BAcc@10 on the test partition?
+run_name: trial10_f0

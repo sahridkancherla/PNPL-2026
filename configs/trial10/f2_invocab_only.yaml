@@ -1,0 +1,7 @@
+# F2 -- only the 50 scored words are tokens, so the targets are the 50 words'
+# embeddings and a word's context is its scored neighbours only -- trials
+# 7-8's setting. Windows stay full 3 s. How much of the reference is training
+# on, and reading context from, every word?
+run_name: trial10_f2
+
+token_set: invocab

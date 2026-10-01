@@ -1,0 +1,5 @@
+configs/trial10/f0_reference.yaml 0
+configs/trial10/f0_reference.yaml 1
+configs/trial10/f1_small_transformer.yaml 0
+configs/trial10/f2_invocab_only.yaml 0
+configs/trial10/f3_pca_input.yaml 0

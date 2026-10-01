@@ -1,0 +1,7 @@
+# F3 -- trials 1-8's input: a fixed whitening PCA to 73 components (fitted on
+# the training partition by the builder) instead of 306 sensors through the
+# position-attention merger. How much of the reference is the input?
+run_name: trial10_f3
+
+model_kwargs:
+  spatial: pca

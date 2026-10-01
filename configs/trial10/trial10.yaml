@@ -1,0 +1,103 @@
+# Trial 10: the d'Ascoli reference, reproduced (Variant F). This file IS F0,
+# the reference; every run file in this folder changes one thing back towards
+# trials 7-8. runs.txt lists them with seeds.
+#
+# Layer order:  base.yaml -> trial10/trial10.yaml -> trial10/hpc.yaml -> one
+# run file. model_kwargs merges key by key (trial10/config.py).
+#
+# Sources: d'Ascoli et al. 2025 (PMC12658044); the competition paper (arXiv
+# 2609.03231), whose Table 1 gives the reference 73.23% BAcc@10 on pnpl's
+# standard test partition; brainmagick's clip_conv.yaml where both are silent.
+# See src/pnpl2026/trial10/info/variant-f.md.
+
+# ⚠️ every run file overrides this
+run_name: trial10
+
+model: trial10_reference
+
+# -- data ------------------------------------------------------------------
+# The reference cache: 306 sensors at 50 Hz, robust-scaled per recording.
+# pnpl's own partitions -- train, validation (selection), test (scoring).
+cache_dir: data/trial10_reference
+n_channels: 306
+sfreq: 50
+
+# 3 s from each word's onset, every window full: 150 samples.
+tmin: 0.0
+tmax: 3.0
+
+# Per window, inside the model: clip to +/-5, then subtract each channel's
+# mean over the first 0.5 s.
+clamp: 5.0
+baseline_seconds: 0.5
+
+# Every word of a sentence is a token, scored or not. Sentences past 64 words
+# are cut into near-equal runs.
+token_set: all
+max_tokens: 64
+
+# -- targets ---------------------------------------------------------------
+# t5-large, middle layer, each word alone, for EVERY word in the cache.
+word_embeddings: data/word_embeddings_t5_all.npz
+centre_embeddings: false
+siglip_dedup: true
+
+# -- the holdout protocol, scored by cli.evaluate (never trained on) ---------
+# Measured on subject 0's holdout, 2026-09-30: 1-9 scored words per sentence,
+# MEG stopping 1.13-1.68 s after the last; 92 of 960 words alone with 1 s.
+holdout_max_tokens: 9
+tail_seconds: [1.1, 1.7]
+isolated_fraction: 0.096
+isolated_seconds: 1.0
+
+model_kwargs:
+  # -- per-word encoder: brainmagick's SimpleConv, clip_conv settings ----------
+  # spatial: merger | linear | pca. merger needs the cache's positions.npy;
+  # linear is the fallback if the h5 files carry no channel names.
+  spatial: merger
+  merger_channels: 270
+  merger_pos_dim: 2048
+  merger_dropout: 0.2
+  initial_linear: 270
+  subject_layer: true
+  # 160, not brainmagick's 320: the paper's 203.7M at 98.8% transformer
+  # leaves ~2.4M for the encoder, which 160 matches (2.7M here).
+  hidden: 160
+  depth: 10
+  kernel_size: 3
+  dilation_growth: 2
+  dilation_period: 5
+  batch_norm: true
+  skip: true
+  glu: 2
+  glu_context: 1
+
+  # -- the sentence transformer: 16 x 1024 x 16 heads, ~201.5M -----------------
+  d_model: 1024
+  sentence_depth: 16
+  n_heads: 16
+  ffn_expansion: 4
+  attention_dropout: 0.1
+  dropout: 0.0
+  drop_path: 0.0
+
+# -- schedule: AdamW, lr 1e-4, cosine over 50 epochs ---------------------------
+# ⚠️ Exponents with a decimal point: PyYAML loads `1e-4` as a STRING.
+lr: 1.0e-4
+# AdamW's own default; the paper names AdamW and no other value.
+weight_decay: 0.01
+warmup_fraction: 0.01
+min_lr: 0.0
+max_epochs: 50
+patience: 10
+
+# SENTENCES per batch; every word in them is a token.
+batch_size: 64
+
+# Faithful: no averaging, no augmentation. Both exist as switches.
+ema_decay: 0.0
+jitter_seconds: 0.0
+
+precision: "32"
+matmul_precision: high
+num_workers: 4
