@@ -88,6 +88,25 @@ correction scored +1.2, i.e. stripping slow offset content hurt there. If H1
 loses, that is the likely reason: the slowest band carries word information,
 not just movement.
 
+## Results — leaderboard, 2026-10-02
+
+Seed 0 only, sentence mode (the default `predict`), Kaggle score:
+
+| run | `highpass_hz` | leaderboard |
+|---|---|---|
+| `h0_control` | null | **0.38024** |
+| `h1_highpass_05` | 0.5 | 0.35041 |
+
+- **H1 is 3.0 points worse than H0. Do not adopt it.** The filter hurt. One
+  seed each, so the gap has no error bar on the leaderboard; trial 8's seed
+  spread was ~0.002 on validation, and 3 points is far outside that.
+- **H0 reproduces E0's leaderboard score** (~38% sentence mode, above), as
+  its bit-identical construction says it should.
+- The likely reason is the one named above, trial 6's C3 finding: the slowest
+  band carries word information, not just movement. That is the expected
+  explanation and has not been tested.
+- Only seed 0 has been submitted; seeds 1 and 2 are untested.
+
 ## Parameters
 
 **4,442,334**, unchanged: the filter's gain is a fixed, non-persistent buffer.

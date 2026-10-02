@@ -81,6 +81,24 @@ Two readings:
 Read `sentence` and `isolated` apart, as in trials 7–8. An isolated word is a
 one-word stream of 1 s, so the shared timeline cannot help it.
 
+## Results — leaderboard, 2026-10-02
+
+Seed 0 only, sentence mode (the default `predict`), Kaggle score:
+
+| run | `stack_factors` | leaderboard |
+|---|---|---|
+| `z1_multirate` | `[1, 2, 4, 8, 4, 2]` | **0.37177** |
+| `z0_flat` | `[1, 1, 1, 1, 1, 1]` | 0.33934 |
+
+- **Z1 beats Z0 by 3.2 points**: the change of rate is worth something, on
+  otherwise identical data, trunk and blocks.
+- **Neither beats trial 8's E0** (~0.38 sentence mode on the leaderboard;
+  trial 9's H0, the same network, scored 0.38024). Z1 is 0.8 points below it
+  and Z0 4.1 below, so one shared stream per sentence did not beat per-word
+  windows plus a word-level transformer here.
+- Both are far below trial 10's F1 (0.58023, a different cache and front end).
+- One seed each, so no error bar; seeds 1 and 2 are not submitted.
+
 ## Parameters
 
 Measured from the built models.
