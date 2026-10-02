@@ -18,8 +18,8 @@ Keep this file current. A stale map is worse than none.
 | `LICENSE` | MIT. |
 | `.claude/` | Claude's configuration — rules, skills, settings. |
 | `src/pnpl2026/` | the package. Shared machinery at its root; one subpackage per trial. |
-| `configs/` | YAML run configs. `base.yaml` is defaults; a second file overrides it. `trial6/`, `trial7/`, `trial8/` and `trial10/` hold one file per ablation run. |
-| `pbs/` | PBS job scripts for the Imperial HPC. `train.pbs`, `sweep.pbs`, `trial5.pbs`, `trial6.pbs`, `trial7_build.pbs`, `trial7.pbs`, `trial8.pbs`, `trial10_build.pbs`, `trial10_embed.pbs`, `trial10.pbs`. |
+| `configs/` | YAML run configs. `base.yaml` is defaults; a second file overrides it. `trial6/`, `trial7/`, `trial8/`, `trial10/` and `trial11/` hold one file per ablation run. |
+| `pbs/` | PBS job scripts for the Imperial HPC. `train.pbs`, `sweep.pbs`, `trial5.pbs`, `trial6.pbs`, `trial7_build.pbs`, `trial7.pbs`, `trial8.pbs`, `trial10_build.pbs`, `trial10_embed.pbs`, `trial10.pbs`, `trial11.pbs`. |
 | `runs/` | checkpoints and per-run logs. Gitignored except `.gitkeep`. |
 | `logs/` | PBS job output and live logs. Gitignored except `.gitkeep`. |
 | `submissions/` | generated submission CSVs. Gitignored except `.gitkeep`. |

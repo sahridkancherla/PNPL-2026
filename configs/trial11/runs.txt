@@ -1,0 +1,6 @@
+configs/trial11/z1_multirate.yaml 0
+configs/trial11/z1_multirate.yaml 1
+configs/trial11/z1_multirate.yaml 2
+configs/trial11/z0_flat.yaml 0
+configs/trial11/z0_flat.yaml 1
+configs/trial11/z0_flat.yaml 2

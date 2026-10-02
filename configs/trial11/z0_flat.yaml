@@ -1,0 +1,7 @@
+# Z0 -- the control: the same six stacks, blocks and bypasses, all at 50 Hz.
+# Z1 against Z0 is what the change of rate itself is worth; Z0 against trial
+# 8's E0 (0.466) is what one shared stream is worth over per-word windows.
+run_name: trial11_z0
+
+model_kwargs:
+  stack_factors: [1, 1, 1, 1, 1, 1]
