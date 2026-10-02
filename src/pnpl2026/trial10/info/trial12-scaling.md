@@ -147,5 +147,20 @@ as a second table when they arrive.
 
 ### Leaderboard
 
-Pending. Submit `submissions/trial12_<run>_s0_in_context.csv` for the six
-non-control runs and add the scores here, with F1's 58.02 as the baseline row.
+Sentence (in-context) mode, seed 0. The other five runs' CSVs exist on RDS
+but are not yet submitted.
+
+| run | params | test ref | **leaderboard** |
+|---|---|---|---|
+| F1 (= `s0_control`) | 5.85M | 71.07 | **58.02** |
+| `w512` | 15.65M | 71.44 | **49.13** (0.49125) |
+
+**This does not show that width hurts.** Trial 13 measured, on the holdout
+itself, that one seed's leaderboard score carries a large training-seed
+component: trial 10/12 models with equal local scores agree on only 30-48% of
+their top-1 picks, and F0's two seeds agree 41% -- no more than different
+architectures do. A 9-point gap between two single seeds cannot be pinned on
+size. Sizes need seed means, or an ensemble per size, on the leaderboard. See
+`../../trial13/info/variant-g.md`, which also explains why every local column
+here misses the leaderboard: the holdout serves short runs of consecutive
+vocabulary words with truncated windows, not whole sentences.

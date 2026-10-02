@@ -1,0 +1,12 @@
+configs/trial13/g0_control.yaml 0
+configs/trial13/g0_control.yaml 1
+configs/trial13/g0_control.yaml 2
+configs/trial13/g1_fragments.yaml 0
+configs/trial13/g1_fragments.yaml 1
+configs/trial13/g1_fragments.yaml 2
+configs/trial13/g2_isolated.yaml 0
+configs/trial13/g2_isolated.yaml 1
+configs/trial13/g2_isolated.yaml 2
+configs/trial13/g3_both.yaml 0
+configs/trial13/g3_both.yaml 1
+configs/trial13/g3_both.yaml 2

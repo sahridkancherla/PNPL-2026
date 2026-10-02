@@ -30,8 +30,6 @@
 #     data/word_embeddings_t5_all.npz    from pbs/trial10_embed.pbs
 # The preflight below names whichever is missing.
 
-# The preflight below names whichever is missing.
-
 set -euo pipefail
 
 cd "$HOME/PNPL-2026"

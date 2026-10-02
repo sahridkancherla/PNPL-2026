@@ -1,0 +1,18 @@
+# Trial 13 on CX3: the machine-shaped knobs only. Layered after trial13.yaml
+# and before the run file, so every run gets the same machine.
+
+# ⚠️ Must equal ncpus in pbs/trial13.pbs.
+num_workers: 8
+
+# fp16 autocast for the RTX6000 that pbs/trial13.pbs asks for (Turing has no
+# bf16); the loss and retrieval scores run in float32 regardless.
+precision: 16-mixed
+
+# No thermal budget on a compute node: run flat out.
+duty_cycle: 1.0
+cooldown_every_minutes: 0.0
+cooldown_seconds: 0.0
+
+# cuda, not auto: auto falls back to the CPU without a word when no GPU is
+# visible, and a CPU run quietly fills the whole walltime.
+accelerator: cuda

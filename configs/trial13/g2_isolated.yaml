@@ -1,0 +1,6 @@
+# G2 -- a tenth of training sentences served as one word alone with exactly
+# 1 s. Every trial 10/12 model collapses on the holdout's 92 isolated words
+# ("really"/"so" for 75-93% of them); none ever trained on a lone window.
+run_name: trial13_g2
+
+isolated_p: 0.1

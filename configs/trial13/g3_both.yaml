@@ -1,0 +1,5 @@
+# G3 -- both: half fragments, a tenth isolated words, the rest whole sentences.
+run_name: trial13_g3
+
+fragment_p: 0.5
+isolated_p: 0.1

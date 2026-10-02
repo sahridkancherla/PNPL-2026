@@ -1,0 +1,3 @@
+# G0 -- the control: F1 exactly, with best.ckpt chosen on the fragment
+# protocol instead of the reference one. Every other run is read against it.
+run_name: trial13_g0

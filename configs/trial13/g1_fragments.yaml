@@ -1,0 +1,6 @@
+# G1 -- half of each epoch's training sentences served as holdout-like
+# fragments: a random run of consecutive words, the MEG cut 1.13-1.68 s after
+# the last onset, so windows are as short as the holdout's (median 1.94 s).
+run_name: trial13_g1
+
+fragment_p: 0.5

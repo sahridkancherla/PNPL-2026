@@ -1,0 +1,12 @@
+run,mode,score,date,file
+trial8_e0_s0,in_context,38.0,2026-10-01,trial8_e0_s0_sentence.csv
+trial8_e0_s0,window_only,28.0,2026-10-01,trial8_e0_s0_window_only.csv
+trial9_h0_s0,in_context,38.024,2026-10-02,trial9_h0_s0_in_context.csv
+trial9_h1_s0,in_context,35.041,2026-10-02,trial9_h1_s0_in_context.csv
+trial10_f0_s0,in_context,49.71,2026-10-02,trial10_f0_s0_in_context.csv
+trial10_f1_s0,in_context,58.023,2026-10-02,trial10_f1_s0_in_context.csv
+trial10_f2_s0,in_context,41.471,2026-10-02,trial10_f2_s0_in_context.csv
+trial10_f3_s0,in_context,51.265,2026-10-02,trial10_f3_s0_in_context.csv
+trial11_z0_s0,in_context,33.934,2026-10-02,trial11_z0_s0_in_context.csv
+trial11_z1_s0,in_context,37.177,2026-10-02,trial11_z1_s0_in_context.csv
+trial12_w512_s0,in_context,49.125,2026-10-02,trial12_w512_s0_in_context.csv
