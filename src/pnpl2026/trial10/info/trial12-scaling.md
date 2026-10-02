@@ -20,7 +20,7 @@ file changes one size. Parameter counts are from trial 10's `build_model`.
 
 | line | run | transformer | encoder hidden | total | transformer | answers |
 |---|---|---|---|---|---|---|
-| 1 | `s0_control` | 4 × 256, 8 heads | 160 | 5.85M | 3.16M | F1 rerun: the control, and one rerun sample beside 58.02 |
+| 1 | `s0_control` | 4 × 256, 8 heads | 160 | 5.85M | 3.16M | F1 rerun: the control. Same seed and config as F1, so **bit-identical to it** (see Results) |
 | 2 | `w512` | 4 × **512**, 8 heads | 160 | 15.65M | 12.61M | width ×2 |
 | 3 | `w1024` | 4 × **1024**, 16 heads | 160 | 53.06M | 50.39M | width ×4: F0's width at F1's depth |
 | 4 | `d8` | **8** × 256 | 160 | 9.01M | 6.32M | depth ×2 |
@@ -44,8 +44,10 @@ which often want a lower one; it is noted, not varied.
   mispredicted trial 10's leaderboard by 20–30 points.
 - **Noise floor.** One seed each; one leaderboard score carries roughly 1.5–2
   points of standard error (an estimate from ~19 scored words per class, not a
-  measurement). `s0_control` against F1's 58.02 gives one rerun sample.
-- **Adopt a larger size only if it beats `s0_control` by 3 points or more.**
+  measurement). ⚠️ `s0_control` is **not** a noise sample: it reproduces F1
+  exactly, so its leaderboard score is F1's 58.02 and needs no submission. The
+  noise has to come from extra seeds (F1 seeds 1–2), which this queue lacks.
+- **Adopt a larger size only if it beats F1's 58.02 by 3 points or more.**
   Anything smaller is "no measurable difference"; confirm with seeds 1–2
   before adopting.
 - Record the result either way.
@@ -108,4 +110,42 @@ inside trial 10's 12 h walltime. All seven fit one array wave.
 
 ## Results
 
-Pending. Paste `runs/trial12_results.md` and the leaderboard scores here.
+### Local results, 2026-10-02 — **not leaderboard scores**
+
+From `cli.collate --name trial12`: every run scored on pnpl's own validation and
+test partitions, BAcc@10 in percent, chance 20. **The leaderboard scores have
+not been submitted yet** and are the ones that decide (below); they get added
+as a second table when they arrive.
+
+| run | params | best epoch | val ref | **test ref** | test ref @1 | test Moses | test holdout | sentence | isolated | train |
+|---|---|---|---|---|---|---|---|---|---|---|
+| paper (d'Ascoli ref) | 203.7M | – | – | **73.23** | 25.60 | 83.60 | – | – | – | – |
+| `s0_control` (= F1) | 5.85M | 23 | 69.83 | **71.07** | 21.21 | 69.52 | 28.91 | 30.39 | 22.04 | 76.69 |
+| `w512` | 15.65M | 22 | 70.27 | **71.44** | 22.44 | 68.57 | 27.98 | 29.66 | 18.62 | 79.37 |
+| `w1024` | 53.06M | 13 | 70.05 | **69.32** | 22.22 | 68.74 | 28.30 | 27.35 | 21.39 | 76.05 |
+| `d8` | 9.01M | 22 | 71.98 | **73.23** | 22.29 | 68.43 | 30.43 | 30.71 | 19.32 | 78.25 |
+| `d16` | 15.33M | 23 | 72.20 | **71.33** | 23.17 | 68.21 | 26.36 | 27.25 | 23.54 | 79.96 |
+| `wd_8x512` | 28.26M | 13 | 71.26 | **70.04** | 20.67 | 68.21 | 30.10 | 29.36 | 21.55 | 75.15 |
+| `e320` | 10.60M | 17 | 71.36 | **72.39** | 21.04 | 68.22 | 31.34 | 32.71 | 17.05 | 74.71 |
+
+- **`s0_control` reproduces F1 to the last digit** in every column, including
+  the best epoch (23): same seed, config and code, so the run is deterministic.
+  It therefore adds no information about run-to-run noise, and its leaderboard
+  score will be F1's 58.02; do not spend a submission on it.
+- **The local columns barely separate the sizes.** Test ref runs from 69.32 to
+  73.23 across a 5.85M to 53M range with no trend in size, against 68.9 and
+  70.4 for F0's two seeds. The test partition is three recordings, so a
+  difference of a point or two is not distinguishable here. `d8` matches the
+  paper's 73.23 exactly, which is a coincidence of rounding, not a finding.
+- Larger transformers stop earlier (`w1024` and `wd_8x512` at epoch 13, against
+  22–23 for the 256-wide ones) without a higher training score. In trial 10
+  F0 stopped at epoch 11–12.
+- **These columns did not predict the leaderboard in trial 10** (F0 70.4 and F1
+  71.1 on test ref; 49.7 and 58.0 on the leaderboard), and the `holdout`
+  columns mispredicted it badly. Read this table as "all seven train fine and
+  are not worse locally", nothing more.
+
+### Leaderboard
+
+Pending. Submit `submissions/trial12_<run>_s0_in_context.csv` for the six
+non-control runs and add the scores here, with F1's 58.02 as the baseline row.
