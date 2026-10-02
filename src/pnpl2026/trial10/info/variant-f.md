@@ -80,8 +80,64 @@ towards trials 7–8, so the table decomposes the 46 → 73 gap.
 
 ## Results
 
-Pending. `cli.collate` writes `runs/trial10_results.md` with the paper's row on
-top; paste it here.
+From `cli.collate`, 2026-10-02. BAcc@10 in percent, chance 20. `ref` is the
+reference protocol, `holdout` the holdout-matched one; test is pnpl's test
+partition, the paper's.
+
+| run | best epoch | val ref | **test ref** | test ref @1 | test Moses | **test holdout** | sentence | isolated | train |
+|---|---|---|---|---|---|---|---|---|---|
+| paper | – | – | **73.23** | 25.60 | 83.60 | – | – | – | – |
+| F0 s0 | 11 | 69.92 | **70.42** | 23.58 | 64.59 | **25.70** | 26.20 | 19.90 | 76.32 |
+| F0 s1 | 12 | 69.79 | **68.90** | 23.87 | 64.69 | **25.98** | 26.26 | 22.37 | 76.84 |
+| F1 small transformer | 23 | 69.83 | **71.07** | 21.21 | 69.52 | **28.91** | 30.39 | 22.04 | 76.69 |
+| F2 scored words only | 17 | 29.79 | **33.93** | 4.02 | 66.04 | **28.07** | 29.13 | 15.00 | 34.74 |
+| F3 PCA input | 12 | 69.98 | **68.81** | 24.00 | 66.49 | **27.57** | 28.97 | 18.30 | 80.17 |
+
+**The reproduction worked.** F0 reaches 69.7% on average (70.4, 68.9) against
+the paper's 73.2%, and BAcc@1 23.7% against 25.6%: within about 3.5 points.
+Train and validation sit 6–7 points apart, so it is not badly overfitting.
+
+**Capacity and input are not what makes it work.** F1, with a 5.85M model
+(3.2M transformer instead of 201.5M), scores 71.1%, as good as F0. F3, with
+trials 1–8's 73 PCA components instead of 306 sensors and the merger, scores
+68.8%. Neither the big transformer nor the spatial front end is needed.
+
+**Every word as a token is the whole effect.** F2, the only change being that
+just the 50 scored words are tokens, falls from ~70% to 33.9%. Training on and
+reading context from every word is worth ~36 points; nothing else in the
+reference moves the score by more than ~2.
+
+**The holdout protocol did not predict the leaderboard.** On the same test
+recordings it gave 25.7–28.9% for every run, and I read that as the holdout
+withholding the every-word context the reference depends on, predicting a
+leaderboard score of ~26–29%, below E0's 38%. That was wrong. Leaderboard
+(sentence mode, 2026-10-02; F0 seed 1 not submitted):
+
+| run | parameters | test ref | test holdout (proxy) | **leaderboard** |
+|---|---|---|---|---|
+| F0 s0 | 204.2M | 70.42 | 25.70 | **49.71** |
+| F1 small transformer | 5.85M | 71.07 | 28.91 | **58.02** |
+| F2 scored words only | 204.2M | 33.93 | 28.07 | **41.47** |
+| F3 PCA input | 203.6M | 68.81 | 27.57 | **51.27** |
+
+F1 beats E0 (~38%) and the organisers' Baseline (44.4%) with 35x fewer
+parameters than F0; F2 does not beat the Baseline. Top teams: 72.7-76.5.
+
+- **The holdout protocol is a poor proxy**: 20-30 points low here, where for
+  E0 it read 8 high, and it ranks F2 second where the leaderboard ranks it
+  last. The reference-protocol columns rank the runs as the leaderboard does
+  (F1 first, F2 last). Rank runs by those; do not use the `holdout` columns.
+- **The small model wins on the leaderboard.** F1 leads F0 by 8.3 points,
+  though they matched on the test partition. One seed each on the leaderboard,
+  but F0's two seeds were 1.5 points apart on test, so the gap is probably
+  real. Untested guess: the 204M model fits the reference setting more tightly
+  and generalises worse to the holdout.
+- **F2's penalty shrinks from 36 points to 8** (F0 vs F2). The holdout serves
+  scored words as tokens, like F2; "every word as a token is the whole effect"
+  describes the reference setting, not the leaderboard.
+
+Open: Moses BAcc@10 is 64.6–69.5% against the paper's 83.6%, a gap the main
+metric does not show. Not explained.
 
 ## Running it
 
