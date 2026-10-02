@@ -10,6 +10,7 @@ it has its own cache and imports from no other trial.
 | where | what |
 |---|---|
 | `variant-f.md` | **start here** — why 46% vs 73%, what was built, the queue, how to run it, what was checked |
+| `trial12-scaling.md` | trial 12: F1 scaled up, seven seed-0 sizes, run with this code (`configs/trial12/`) |
 | `../data_processing/build_reference.py` | the cache: all three pnpl partitions, per-recording scaler, positions, PCA |
 | `../data/` | sentences as token sequences under two protocols, reference and holdout |
 | `../models/` | `merger.py`, `encoder.py`, `transformer.py`, `net.py` |

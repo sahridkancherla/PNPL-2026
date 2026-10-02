@@ -1,0 +1,18 @@
+# Trial 12: scaling F1 up -- a seed-0 size ablation. Runs TRIAL 10's code
+# (pnpl2026.trial10.cli.train) unchanged, on trial 10's cache and t5 table;
+# this folder holds configs only.
+#
+# Layer order:  base.yaml -> trial10/trial10.yaml -> trial10/hpc.yaml ->
+# trial12/trial12.yaml -> one run file. model_kwargs merges key by key.
+#
+# This file makes the base F1, trial 10's winner (58.02 on the leaderboard):
+# the sentence transformer at 4 x 256 x 8 heads, everything else F0's. Each run
+# file changes ONE size. See src/pnpl2026/trial10/info/trial12-scaling.md.
+
+# ⚠️ every run file overrides this
+run_name: trial12
+
+model_kwargs:
+  d_model: 256
+  sentence_depth: 4
+  n_heads: 8

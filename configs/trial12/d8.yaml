@@ -1,0 +1,5 @@
+# D8 -- transformer depth x2: 8 x 256 (9.01M).
+run_name: trial12_d8
+
+model_kwargs:
+  sentence_depth: 8

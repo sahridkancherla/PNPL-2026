@@ -1,0 +1,7 @@
+# W1024 -- transformer width x4: 4 x 1024, 16 heads (53.06M). F0's width at
+# F1's depth.
+run_name: trial12_w1024
+
+model_kwargs:
+  d_model: 1024
+  n_heads: 16

@@ -1,16 +1,23 @@
-"""Collate every trial-10 run into one results file, beside the paper's numbers.
+"""Collate every run of a trial-10-code queue into one results file.
 
     PYTHONPATH=src python -m pnpl2026.trial10.cli.collate
+    PYTHONPATH=src python -m pnpl2026.trial10.cli.collate \\
+        --runs-list configs/trial12/runs.txt --name trial12
 
-Reads runs/trial10_<run>_s<seed>/ for every line of configs/trial10/runs.txt
-and writes two files to runs/:
+Reads runs/<run>_s<seed>/ for every line of the runs list and writes two files
+to runs/, named by --name (default trial10, trial 10's own queue):
 
-    trial10_results.md    one row per seed, the paper's row on top. Paste it
-    trial10_results.csv   every number, per-task scores included
+    <name>_results.md    one row per seed, the paper's row on top. Paste it
+    <name>_results.csv   every number, per-task scores included
+
+⚠️ Pass --name for any queue other than trial 10's, or its table overwrites
+trial 10's.
 
 A finished run reports its evaluation.json (best.ckpt scored on validation and
 test, both protocols). A run still going reports its best val/bacc10 so far
-from metrics.csv. Light enough for a login node: it reads JSON and CSV only.
+from metrics.csv. The parameter count is built from the run's saved config on
+PyTorch's meta device: no weights are allocated, so it stays light enough for a
+login node.
 """
 
 from __future__ import annotations
@@ -19,11 +26,21 @@ import argparse
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+import torch
 import yaml
 
 from ...config import REPO_ROOT, RUNS_DIR
+from ..config import Trial10Config
+from ..models import T5_WIDTH, build_model
 from .evaluate import PAPER_REFERENCE
+
+#the paper's model size, for its row of the table
+PAPER_PARAMETERS = 203.7e6
+
+#trial 10's own heading, kept as it was; other queues get a generic one
+TRIAL10_HEADING = "Trial 10 -- the d'Ascoli reference, reproduced"
 
 #markdown columns: header -> (protocol, partition, metric)
 COLUMNS = {
@@ -43,7 +60,64 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runs-list", default="configs/trial10/runs.txt", help="repo-relative")
     parser.add_argument("--runs-dir", default=None, help="defaults to the repo's runs/")
+    parser.add_argument(
+        "--name",
+        default="trial10",
+        help="output files are runs/<name>_results.md and .csv; set it for any other queue",
+    )
     return parser.parse_args()
+
+
+def count_parameters(run_dir):
+    """The run's parameter count, from its saved config, without any weights.
+
+    ARGS:
+        run_dir (Path): holds config.yaml, written by cli.train at start
+
+    RETURNS:
+        int, or None before the run has started
+    """
+    path = run_dir / "config.yaml"
+    if not path.exists():
+        return None
+    cfg = Trial10Config(**yaml.safe_load(path.read_text(encoding="utf-8")))
+
+    #placeholders of the right shapes: a count does not depend on their values
+    positions = np.zeros((cfg.n_channels, 2), dtype=np.float32)
+    pca = {
+        "mean": np.zeros(cfg.n_channels),
+        "components": np.zeros((73, cfg.n_channels)),
+        "scale": np.ones(73),
+    }
+
+    #on the meta device every tensor is a shape only, so 204M costs nothing
+    with torch.device("meta"):
+        model = build_model(
+            cfg.model,
+            n_channels=cfg.n_channels,
+            embed_dim=T5_WIDTH,
+            sample_rate=float(cfg.sfreq),
+            clamp=cfg.clamp,
+            baseline_seconds=cfg.baseline_seconds,
+            positions=positions,
+            pca=pca,
+            **cfg.model_kwargs,
+        )
+    return sum(parameter.numel() for parameter in model.parameters())
+
+
+def millions(count):
+    """A parameter count as a short cell, e.g. 5.85M, or a dash.
+
+    ARGS:
+        count (int, float or None)
+
+    RETURNS:
+        str
+    """
+    if count is None or pd.isna(count):
+        return "-"
+    return f"{count / 1e6:.2f}M"
 
 
 def read_queue(runs_list):
@@ -153,13 +227,25 @@ def main():
 
     rows = []
     for run_name, seed in queue:
+        run_dir = runs_dir / f"{run_name}_s{seed}"
         row = {"run": run_name, "seed": seed}
-        row.update(summarise(runs_dir / f"{run_name}_s{seed}"))
+        row.update(summarise(run_dir))
+        row["params"] = count_parameters(run_dir)
         rows.append(row)
 
-    headers = ["run", "seed", "status", "epoch"] + list(COLUMNS) + ["train @10"]
+    #the paper's row: its Table 1 numbers in the reference-protocol test columns
+    paper = {
+        "TEST ref @10": f"**{percent(PAPER_REFERENCE['bacc10'])}**",
+        "test ref @1": percent(PAPER_REFERENCE["bacc1"]),
+        "test Moses @10": percent(PAPER_REFERENCE["moses_bacc10"]),
+    }
+    paper_cells = ["paper (d'Ascoli ref)", "-", "-", "-", millions(PAPER_PARAMETERS)]
+    paper_cells += [paper.get(header, "-") for header in COLUMNS] + ["-"]
+
+    heading = TRIAL10_HEADING if args.name == "trial10" else f"{args.name} -- run with trial 10's code"
+    headers = ["run", "seed", "status", "epoch", "params"] + list(COLUMNS) + ["train @10"]
     lines = [
-        "# Trial 10 -- the d'Ascoli reference, reproduced",
+        f"# {heading}",
         "",
         "BAcc@10 in percent; chance is 20. `ref` is the reference protocol (every word",
         "a token, full 3 s windows); `holdout` is the holdout-matched protocol. The",
@@ -167,28 +253,27 @@ def main():
         "",
         "| " + " | ".join(headers) + " |",
         "|" + "---|" * len(headers),
-        "| paper (d'Ascoli ref) | - | - | - | - | "
-        f"**{percent(PAPER_REFERENCE['bacc10'])}** | {percent(PAPER_REFERENCE['bacc1'])} | "
-        f"{percent(PAPER_REFERENCE['moses_bacc10'])} | - | - | - | - | - |",
+        "| " + " | ".join(paper_cells) + " |",
     ]
     for row in rows:
         cells = [row["run"], str(row["seed"]), row["status"]]
 
         #a run still training shows its best validation so far in the val column
         if row["status"] != "done":
-            cells.append(str(row.get("epochs", "-")))
+            cells += [str(row.get("epochs", "-")), millions(row["params"])]
             cells += [percent(row.get("best_val"))] + ["-"] * (len(COLUMNS) - 1) + ["-"]
         else:
-            cells.append(str(row.get("best_epoch", "-")))
+            cells += [str(row.get("best_epoch", "-")), millions(row["params"])]
             cells += [percent(row.get("/".join(key))) for key in COLUMNS.values()]
             cells.append(percent(row.get("train/bacc10")))
         lines.append("| " + " | ".join(cells) + " |")
 
     markdown = "\n".join(lines) + "\n"
-    (runs_dir / "trial10_results.md").write_text(markdown, encoding="utf-8")
-    pd.DataFrame(rows).to_csv(runs_dir / "trial10_results.csv", index=False)
+    markdown_path = runs_dir / f"{args.name}_results.md"
+    markdown_path.write_text(markdown, encoding="utf-8")
+    pd.DataFrame(rows).to_csv(runs_dir / f"{args.name}_results.csv", index=False)
     print(markdown)
-    print(f"[collate] wrote {runs_dir / 'trial10_results.md'} and trial10_results.csv")
+    print(f"[collate] wrote {markdown_path} and {args.name}_results.csv")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,6 @@
+# D16 -- transformer depth x4: 16 x 256 (15.33M). F0's depth at F1's width;
+# the same size as W512.
+run_name: trial12_d16
+
+model_kwargs:
+  sentence_depth: 16

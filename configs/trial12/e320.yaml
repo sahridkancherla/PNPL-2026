@@ -1,0 +1,6 @@
+# E320 -- encoder width x2: ConvSequence hidden 320, brainmagick's own value
+# (10.60M; the encoder goes 2.43M -> 7.18M). The transformer stays F1's.
+run_name: trial12_e320
+
+model_kwargs:
+  hidden: 320

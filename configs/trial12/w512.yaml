@@ -1,0 +1,6 @@
+# W512 -- transformer width x2: 4 x 512, 8 heads (15.65M). The same size as
+# D16, so the pair compares width against depth at fixed parameters.
+run_name: trial12_w512
+
+model_kwargs:
+  d_model: 512

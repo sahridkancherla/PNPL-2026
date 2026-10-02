@@ -1,0 +1,3 @@
+# S0 -- F1 unchanged (5.85M), rerun in this queue's environment. The control
+# every other run is read against, and one rerun sample beside F1's 58.02.
+run_name: trial12_s0

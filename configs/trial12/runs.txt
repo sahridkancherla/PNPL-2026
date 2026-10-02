@@ -1,0 +1,7 @@
+configs/trial12/s0_control.yaml 0
+configs/trial12/w512.yaml 0
+configs/trial12/w1024.yaml 0
+configs/trial12/d8.yaml 0
+configs/trial12/d16.yaml 0
+configs/trial12/wd_8x512.yaml 0
+configs/trial12/e320.yaml 0

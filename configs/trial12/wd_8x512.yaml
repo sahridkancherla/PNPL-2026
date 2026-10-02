@@ -1,0 +1,6 @@
+# WD -- width and depth both x2: 8 x 512, 8 heads (28.26M).
+run_name: trial12_wd
+
+model_kwargs:
+  d_model: 512
+  sentence_depth: 8
