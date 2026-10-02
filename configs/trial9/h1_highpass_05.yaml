@@ -1,0 +1,6 @@
+# H1 -- a 0.5 Hz zero-phase high-pass on every window, before the norm.
+# Removes slow drift (movement, sensor drift); keeps the 1-8 Hz word response.
+run_name: trial9_h1
+
+model_kwargs:
+  highpass_hz: 0.5

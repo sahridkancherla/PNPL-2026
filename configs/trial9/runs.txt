@@ -1,0 +1,6 @@
+configs/trial9/h1_highpass_05.yaml 0
+configs/trial9/h1_highpass_05.yaml 1
+configs/trial9/h1_highpass_05.yaml 2
+configs/trial9/h0_control.yaml 0
+configs/trial9/h0_control.yaml 1
+configs/trial9/h0_control.yaml 2

@@ -1,0 +1,7 @@
+# H0 -- the control: no high-pass. Trial 8's E0 rerun in trial 9's code, so
+# H1 differs from it in the filter alone. Lines 4-6 of runs.txt; if the queue
+# is short, trial 8's E0 (0.466 +/- 0.001) is the same configuration.
+run_name: trial9_h0
+
+model_kwargs:
+  highpass_hz: null
