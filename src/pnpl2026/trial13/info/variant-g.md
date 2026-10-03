@@ -162,8 +162,53 @@ outside each word's own 1 s window; the rules do not settle that either.
 
 ## Results
 
-Pending: Phase 0's ensemble score, `runs/trial13_calibration.md`, then
-`runs/trial13_results.md` and the leaderboard.
+### Phase 0 — ensembles of existing predictions (leaderboard, 2026-10-02/03)
+
+| submission | members | leaderboard |
+|---|---|---|
+| `ensemble_t10t12` | F0 s0/s1, F1, F3, w512, w1024, d8, d16, wd, e320 | **61.13** |
+| `ensemble_t10t12_v2` | F1, w1024 | **62.42** |
+
+The 10-file ensemble scores 61.1, about 7 points above its members' mean
+(53.8 over the 8 with scores) and level with its best member (w1024, 61.3).
+The members were not chosen by leaderboard score, so 61.1 is an honest
+estimate. ⚠️ v2's two members WERE chosen by their leaderboard scores, on the
+same 960 rows that score v2, so its 62.4 is optimistic.
+
+### Phase A — calibration (`runs/trial13_calibration.md`): inconclusive
+
+The fragment protocol scores only 128 test words (38 classes, 13 isolated)
+and 239 validation words: runs of 4+ consecutive vocabulary words are rare in
+pnpl's narrative recordings, and MOCHATIMIT has none. At ~3 words per class
+every fragment score carries ±4-5 points of noise, so the Spearman values
+(n = 5) and the ensemble/switch effects there decide nothing. It also reads
+far below the leaderboard: F1 scores 22.1 on it against 58.0 there.
+
+Informative: runs agree on top-1 as rarely locally (0.275) as on the holdout
+(0.305), so the disagreement is single-trial noise, not a holdout shift.
+
+### Phase B — the queue (`runs/trial13_results.md`, local, 2026-10-03)
+
+Seed means ± half-range, BAcc@10 %; FRAG test is 128 words, frag val 239.
+
+| run | FRAG test | frag val | isolated | ref test |
+|---|---|---|---|---|
+| G0 control | 32.36 ± 4.16 | 39.05 ± 2.13 | 16.67 ± 5.21 | 70.03 ± 2.89 |
+| G1 fragments | **49.22** ± 1.52 | **50.04** ± 1.11 | 21.53 ± 4.17 | **73.27** ± 1.00 |
+| G2 isolated | 31.80 ± 1.87 | 38.44 ± 2.40 | **32.64** ± 8.33 | 69.32 ± 2.51 |
+| G3 both | 47.98 ± 1.05 | **51.09** ± 1.96 | 29.86 ± 6.25 | 70.70 ± 2.37 |
+
+- **Fragment training is the largest local effect in any trial**: G1 beats G0
+  by +17 on the test fragments and +11 on the validation fragments (separate
+  recordings), in every seed, while the full-context reference score does not
+  drop (73.3 vs 70.0). Fragment noise is ±4-5 per run, far below the gap.
+- **Isolated-word training raises isolated recall** (G2 32.6 vs G0 16.7), but
+  13 isolated test words make that ±10 noise; it costs nothing elsewhere.
+- ⚠️ G1 and G3 were trained on, and selected by, the geometry this protocol
+  measures, so part of the gain may be specific to the proxy. Only the
+  leaderboard can confirm it: submit each config's 3-seed ensemble.
+- Absolute fragment scores are not leaderboard numbers (F1: 22 here, 58 there).
+- BatchNorm re-estimation lowers the fragment score in G1 and G3; not used.
 
 **Deferred, in order:** train the final models on all 162 recordings; a
 stream (Zipformer-style) variant on this pipeline; test-time onset jitter;

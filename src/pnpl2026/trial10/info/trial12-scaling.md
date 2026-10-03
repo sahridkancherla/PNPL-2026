@@ -147,13 +147,21 @@ as a second table when they arrive.
 
 ### Leaderboard
 
-Sentence (in-context) mode, seed 0. The other five runs' CSVs exist on RDS
-but are not yet submitted.
+Sentence (in-context) mode, seed 0, 2026-10-02/03. `d8` is not yet submitted.
 
 | run | params | test ref | **leaderboard** |
 |---|---|---|---|
 | F1 (= `s0_control`) | 5.85M | 71.07 | **58.02** |
 | `w512` | 15.65M | 71.44 | **49.13** (0.49125) |
+| `w1024` | 53.06M | 69.32 | **61.28** |
+| `d16` | 15.33M | 71.33 | **54.84** |
+| `wd_8x512` | 28.26M | 70.04 | **51.70** |
+| `e320` | 10.60M | 72.39 | **54.76** |
+
+**No trend with size.** The two widest transformers are both worst (`w512`,
+49.1) and best (`w1024`, 61.3), across a 12-point range from runs that sit
+within 3 points of each other locally. That is what large seed variance looks
+like, not a size effect.
 
 **This does not show that width hurts.** Trial 13 measured, on the holdout
 itself, that one seed's leaderboard score carries a large training-seed
