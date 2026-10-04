@@ -21,6 +21,10 @@ to lean on, so every window must carry its own evidence.
 | Output | one of **50** words |
 | Metric | **BAcc@10** — **chance is 20%**, not 2% |
 
+⚠️ **Deep track rule: train on subject 0's data only.** Training on other
+subjects' data is **not allowed** -- no multi-subject pretraining, no pooled
+training, no downloading other subjects' recordings for deep-track models.
+
 `T = (tmax - tmin) * sfreq`. All four numbers live in `Config`; read them from
 the config rather than hard-coding 250.
 

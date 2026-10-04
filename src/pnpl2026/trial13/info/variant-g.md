@@ -235,5 +235,6 @@ Seed means ± half-range, BAcc@10 %; FRAG test is 128 words, frag val 239.
 - Adding more models plateaus: 13 models (61.4) score below G2's 3 seeds.
 
 **Deferred, in order:** train the final models on all 162 recordings; a
-stream (Zipformer-style) variant on this pipeline; test-time onset jitter;
-multi-subject pretraining (rules check first).
+stream (Zipformer-style) variant on this pipeline; test-time onset jitter.
+Multi-subject pretraining is **ruled out**: the deep track does not allow
+training on other subjects' data.
