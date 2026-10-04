@@ -16,3 +16,8 @@ trial12_d16_s0,in_context,54.844,2026-10-02,trial12_d16_s0_in_context.csv
 trial12_e320_s0,in_context,54.763,2026-10-02,trial12_e320_s0_in_context.csv
 ensemble_t10t12,in_context,61.125,2026-10-02,ensemble_t10t12_in_context.csv
 ensemble_t10t12_v2,in_context,62.42,2026-10-03,ensemble_t10t12_v2_in_context.csv
+trial13_g0_ens,in_context,57.582,2026-10-03,trial13_g0_ens_in_context.csv
+trial13_g1_ens,in_context,62.837,2026-10-03,trial13_g1_ens_in_context.csv
+trial13_g2_ens,in_context,63.408,2026-10-03,trial13_g2_ens_in_context.csv
+trial13_g3_ens,in_context,60.849,2026-10-03,trial13_g3_ens_in_context.csv
+ensemble_t10t12t13,in_context,61.406,2026-10-03,ensemble_t10t12t13_in_context.csv

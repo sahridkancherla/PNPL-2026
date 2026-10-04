@@ -210,6 +210,30 @@ Seed means ± half-range, BAcc@10 %; FRAG test is 128 words, frag val 239.
 - Absolute fragment scores are not leaderboard numbers (F1: 22 here, 58 there).
 - BatchNorm re-estimation lowers the fragment score in G1 and G3; not used.
 
+### Phase C — leaderboard, 3-seed ensembles (2026-10-03)
+
+| submission | leaderboard | vs G0 |
+|---|---|---|
+| G0 control | 57.58 | — |
+| G1 fragments | 62.84 | +5.3 |
+| **G2 isolated** | **63.41** | **+5.8** |
+| G3 both | 60.85 | +3.3 |
+| G1 + G3 seeds + the 10 trial 10/12 files | 61.41 | +3.8 |
+
+- **Holdout-shaped training helps on the leaderboard**: every shaped config
+  beats the control's ensemble by 3-6 points, against ~1.5-2 points of noise
+  per submission. Far less than the +17 the local fragment protocol showed,
+  which over-predicted.
+- **G2, the isolated-word fix, is the best submission not chosen by
+  leaderboard score**: consistent with recovering the ~3-4 points the isolated
+  collapse cost, plus some. G3 (both) is below either alone; unexplained, and
+  within ~1-2 standard errors of G1/G2.
+- Seed ensembling of the control is worth nothing here: G0's 3 seeds (57.58)
+  sit level with F1's single seed (58.02), the same recipe. F1's 58 was a
+  fortunate seed; the ten-file ensemble's +7 came from pooling ten different
+  models.
+- Adding more models plateaus: 13 models (61.4) score below G2's 3 seeds.
+
 **Deferred, in order:** train the final models on all 162 recordings; a
 stream (Zipformer-style) variant on this pipeline; test-time onset jitter;
 multi-subject pretraining (rules check first).
