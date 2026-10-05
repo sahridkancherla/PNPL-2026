@@ -140,7 +140,34 @@ weight on the leaderboard. Record every score in
   same top-10 set in all 960 rows); H1 writes its blend, `--closed-weight 0.25`
   changes the primary columns only; a head-less run refuses a weight above 0
 
-## Results
+## Results (2026-10-05) — negative on the leaderboard
 
-Pending: `runs/trial14_calibration.md`, `runs/trial14_results.md`, and the
-leaderboard scores of the three ensembles.
+BAcc@10, %. Local = chunked test, seed mean. LB = leaderboard, 3-seed
+ensemble at the run's own weight; G2's 63.41 is the reference. The
+leaderboard itself carries roughly ±2 points (960 rows, an estimate).
+
+| run | local | LB | LB vs G2 |
+|---|---|---|---|
+| G2 (parent, trial 13) | 49.66 | 63.41 | — |
+| H0 head on frozen G2 | 52.25 | 61.61 | −1.8 |
+| H1 head + network | **55.11** | 61.59 | −1.8 |
+| H2 network, no head | 51.32 | 59.63 | −3.8 |
+| H1, head alone (w = 1) | 54.54 | 59.20 | −4.2 |
+| H1 + G1, 6 members | — | 63.21 | −0.2 |
+
+- **The head does not transfer.** On G2's exact network (H0) it costs 1.8;
+  the more weight it gets, the lower the score (w 0: 63.41, 0.5: 61.6,
+  1: 59.2). Locally it gained 2.6 (H0) to 5.5 (H1).
+- **More fine-tuning hurt**: H2 is G2 plus up to 15 epochs selected on
+  chunked validation, +1.7 locally, −3.8 on the leaderboard. H1 − H2 is +2.0
+  on the leaderboard, in the local direction, but both sit below G2.
+- **Validation-chosen weights** (`w*` 0.92 for H0, 0.75 for H1) scored no
+  better on test than 0.5 locally; not submitted.
+- **The chunked protocol inverts trial 13's singles**: G2 s0 is the lowest of
+  23 runs locally (47.83) and scored 62.82; G1 s1 is among the highest
+  (60.08) and scored 57.32. Calibration over the 23 older runs
+  (`runs/trial14_calibration.md`): Spearman +0.47 over 9 singles, −0.29 over
+  7 ensembles, before these two points were added. Top-1 agreement matches
+  the holdout (0.326 local, 0.330 holdout), so the geometry is right and the
+  ranking is not; why is open.
+- G2 s0 alone (62.82) is within 0.6 of G2's ensemble.

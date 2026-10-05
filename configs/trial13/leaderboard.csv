@@ -21,3 +21,10 @@ trial13_g1_ens,in_context,62.837,2026-10-03,trial13_g1_ens_in_context.csv
 trial13_g2_ens,in_context,63.408,2026-10-03,trial13_g2_ens_in_context.csv
 trial13_g3_ens,in_context,60.849,2026-10-03,trial13_g3_ens_in_context.csv
 ensemble_t10t12t13,in_context,61.406,2026-10-03,ensemble_t10t12t13_in_context.csv
+trial14_h1_ens,in_context,61.594,2026-10-05,trial14_h1_ens_in_context.csv
+trial14_h0_ens,in_context,61.612,2026-10-05,trial14_h0_ens_in_context.csv
+trial14_h2_ens,in_context,59.629,2026-10-05,trial14_h2_ens_in_context.csv
+trial14_h1g1_ens,in_context,63.209,2026-10-05,trial14_h1g1_ens_in_context.csv
+trial14_h1_ens,in_context_w1.00,59.199,2026-10-05,trial14_h1_ens_in_context_w1.00.csv
+trial13_g1_s1,in_context,57.317,2026-10-05,trial13_g1_s1_in_context.csv
+trial13_g2_s0,in_context,62.82,2026-10-05,trial13_g2_s0_in_context.csv
