@@ -171,3 +171,20 @@ leaderboard itself carries roughly ±2 points (960 rows, an estimate).
   the holdout (0.326 local, 0.330 holdout), so the geometry is right and the
   ranking is not; why is open.
 - G2 s0 alone (62.82) is within 0.6 of G2's ensemble.
+
+### Ensembles of existing predictions, no training (2026-10-05)
+
+| ensemble | members | LB |
+|---|---|---|
+| G1 + G2 | 6 | 64.47 |
+| G2 + F1 + w1024 | 5 | 65.48 |
+| **G1 + G2 + F1 + w1024** | 8 | **66.39** — best so far; up 12 places from 63.41 |
+| G1 + G2 + G3 | 9 | 61.27 |
+| G1 ens + G2 ens + (F1, w1024) ens, each a third | 8 | 64.92 |
+
+Mixing recipes pays: adding trial 10/12's whole-sentence pair (F1, w1024)
+gained about 2 on both G2 and G1 + G2. Adding G3, which combines G1's and
+G2's switches, cost 3. Giving the F1 + w1024 pair a third of the vote
+instead of a quarter scored 1.5 lower: more weight on two models is not more
+diversity. Next: seeds 1-2 of F1 and w1024. Each step is near the leaderboard's ±2 noise, and the
+best is the maximum of ~15 tries, so expect it to read a little high.
