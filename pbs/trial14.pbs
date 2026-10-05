@@ -1,0 +1,139 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=64gb:ngpus=1:gpu_type=RTX6000
+#PBS -l walltime=03:00:00
+#PBS -N pnpl-trial14
+#PBS -j oe
+#PBS -o logs/
+
+# Trial 14: G2 plus a trained 50-word head. Three configs x three seeds, one
+# per line of configs/trial14/runs.txt; seed k starts from trial 13's G2 seed k.
+# From the repo root:
+#
+#     qsub -J 1-9 pbs/trial14.pbs      every line, one array wave
+#     qsub -v RUN=<n> pbs/trial14.pbs  one line again: a rerun, or a resume
+#
+# Walltime: fine-tuning a 5.85M network for at most 15 epochs (~2.1 min each on
+# an RTX6000, as trial 10's F1), then scoring best.ckpt under three protocols
+# with dumps. H0 trains the head alone and is faster. --resume continues a
+# killed run from last.ckpt.
+#
+# ⚠️ RTX6000 trains in fp16 ("16-mixed" in configs/trial14/hpc.yaml).
+#
+# ⚠️ num_workers in configs/trial14/hpc.yaml must match ncpus above.
+#
+# ⚠️ Submit from the repo root. `-o logs/` is resolved against where qsub ran.
+#
+# ⚠️ Nothing below downloads. Needs on RDS, already built:
+#     data/trial10_reference/            from pbs/trial10_build.pbs
+#     data/word_embeddings_t5_all.npz    from pbs/trial10_embed.pbs
+#     runs/trial13_g2_s{0,1,2}/best.ckpt from pbs/trial13.pbs (G2)
+# The preflight below names whichever is missing.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+# Without this, python block-buffers stdout when it is not a terminal.
+export PYTHONUNBUFFERED=1
+# uv on a compute node must never try the network: offline, it fails at once.
+export UV_OFFLINE=1
+
+# The array index when there is one, otherwise RUN from `qsub -v RUN=<n>`.
+INDEX="${PBS_ARRAY_INDEX:-${RUN:-}}"
+if [ -z "$INDEX" ]; then
+    echo "no run chosen: submit with -J <range>, or -v RUN=<line of runs.txt>" >&2
+    exit 1
+fi
+
+# Each line is "<config> <seed>".
+read -r RUN_CONFIG SEED <<< "$(sed -n "${INDEX}p" configs/trial14/runs.txt)"
+if [ -z "${RUN_CONFIG:-}" ] || [ ! -f "$RUN_CONFIG" ] || [ -z "${SEED:-}" ]; then
+    echo "line ${INDEX} of configs/trial14/runs.txt is not '<config> <seed>'" >&2
+    exit 1
+fi
+
+CONFIGS=(configs/base.yaml configs/trial14/trial14.yaml configs/trial14/hpc.yaml "$RUN_CONFIG")
+
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.$(basename "$RUN_CONFIG" .yaml)_s${SEED}.live.log"
+echo "run ${INDEX}: ${RUN_CONFIG} seed ${SEED} -> live log: $LIVE_LOG"
+
+# Check the inputs and the GPU in the first minute, not after hours of queue.
+# Prints "<cache dir> <run name>" on stdout; everything else goes to stderr.
+preflight() {
+    SEED="$SEED" uv run --frozen python - "${CONFIGS[@]}" <<'PYTHON'
+import dataclasses
+import json
+import os
+import sys
+
+import torch
+
+from pnpl2026.trial14.config import load_trial14_config
+
+# The seed arrives in a later config layer; the parent checkpoint depends on it.
+cfg = dataclasses.replace(load_trial14_config(*sys.argv[1:]), seed=int(os.environ["SEED"]))
+cache = cfg.resolved_cache_dir()
+
+needed = [cache / "manifest.json", cfg.resolved_word_embeddings()]
+if cfg.resolved_init_checkpoint() is not None:
+    needed.append(cfg.resolved_init_checkpoint())
+missing = [str(path) for path in needed if not path.exists()]
+if missing:
+    sys.exit(f"[preflight] not on RDS: {missing}. Run trial10_build / trial10_embed / trial13 (G2) first.")
+
+# All three partitions, and positions if the merger needs them.
+manifest = json.loads((cache / "manifest.json").read_text())
+partitions = {record["partition"] for record in manifest["recordings"]}
+if not {"train", "validation", "test"} <= partitions:
+    sys.exit(f"[preflight] the cache holds only {sorted(partitions)}; prepare the rest and rebuild.")
+if cfg.model_kwargs.get("spatial", "merger") == "merger" and not manifest["has_positions"]:
+    sys.exit("[preflight] no sensor positions in the cache: set spatial: linear in trial14.yaml.")
+
+# Exactly one. None means Lightning trains on the CPU; several means it
+# spreads the run over GPUs this job was never given.
+n_gpus = torch.cuda.device_count()
+if n_gpus != 1:
+    sys.exit(f"[preflight] torch sees {n_gpus} GPUs; this job asked for 1.")
+if cfg.precision == "bf16-mixed" and not torch.cuda.is_bf16_supported():
+    sys.exit(f"[preflight] {torch.cuda.get_device_name(0)} has no bf16; use precision 16-mixed.")
+
+print(
+    f"[preflight] {cfg.run_name} on {torch.cuda.get_device_name(0)} | "
+    f"torch {torch.__version__} | CUDA {torch.version.cuda}",
+    file=sys.stderr,
+)
+print(cache, cfg.run_name)
+PYTHON
+}
+
+# pipefail is set above, so a failure anywhere in here still fails the job
+# through tee.
+{
+    # Captured first: an assignment carries the preflight's exit status, so a
+    # failed check stops the job here. `read <<<` alone would swallow it
+    PREFLIGHT=$(preflight)
+    read -r CACHE_DIR BASE_NAME <<< "$PREFLIGHT"
+
+    # Copy the cache to the node's local disk. Every word's window is a
+    # random-access slice; from RDS that is small reads over the network.
+    STAGED_CACHE="${TMPDIR:?not set -- submit with qsub}/$(basename "$CACHE_DIR")"
+    echo "[stage] $CACHE_DIR ($(du -sh "$CACHE_DIR" | cut -f1)) -> $STAGED_CACHE"
+    SECONDS=0
+    cp -r "$CACHE_DIR" "$STAGED_CACHE"
+    echo "[stage] copied in ${SECONDS}s"
+
+    # One more config layer, last so it wins: the staged cache, the seed, and
+    # a run name carrying the seed, so two seeds never share a directory.
+    # ⚠️ The run's config.yaml will name a $TMPDIR path gone after the job;
+    # cli.evaluate falls back to data/trial10_reference, and cli.predict
+    # needs no cache at all.
+    STAGE_CONFIG="$TMPDIR/staged_run.yaml"
+    printf 'cache_dir: "%s"\nseed: %s\nrun_name: "%s_s%s"\n' \
+        "$STAGED_CACHE" "$SEED" "$BASE_NAME" "$SEED" > "$STAGE_CONFIG"
+
+    # --resume continues from last.ckpt, so a walltime kill just means
+    # resubmitting the same line rather than starting over.
+    uv run --frozen python -m pnpl2026.trial14.cli.train \
+        --config "${CONFIGS[@]}" "$STAGE_CONFIG" --resume
+} 2>&1 | tee "$LIVE_LOG"

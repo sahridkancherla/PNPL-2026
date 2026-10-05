@@ -1,0 +1,82 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=64gb:ngpus=1:gpu_type=RTX6000
+#PBS -l walltime=04:00:00
+#PBS -N pnpl-trial14-calibrate
+#PBS -j oe
+#PBS -o logs/
+
+# Trial 14's calibration: score every finished trial 10, 12 and 13 checkpoint
+# under the chunked protocol (plus fragment and reference), dumps kept, then
+# check the chunked score against the leaderboard -- single runs and the
+# submitted ensembles, which are rebuilt from their members' dumps. No
+# training. From the repo root:
+#
+#     qsub pbs/trial14_calibrate.pbs
+#
+# Writes runs/trial14_calibration/<run>/{evaluation.json,dumps/} and
+# runs/trial14_calibration.md. It never touches a run's own evaluation.json.
+#
+# Walltime: 23 checkpoints x 3 protocols x 2 partitions. The 21 small ones take
+# minutes each; F0 and F2 (204M) the longest. A killed job can simply be
+# resubmitted: finished runs are skipped.
+#
+# ⚠️ Submit from the repo root. `-o logs/` is resolved against where qsub ran.
+#
+# ⚠️ Needs on RDS: data/trial10_reference/ and the runs below. Leaderboard
+# scores come from configs/trial13/leaderboard.csv and the ensembles'
+# members from configs/trial14/ensembles.csv; keep both current.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+export PYTHONUNBUFFERED=1
+export UV_OFFLINE=1
+
+RUNS=(trial10_f0_s0 trial10_f0_s1 trial10_f1_s0 trial10_f2_s0 trial10_f3_s0
+      trial12_w512_s0 trial12_w1024_s0 trial12_d8_s0 trial12_d16_s0 trial12_wd_s0 trial12_e320_s0
+      trial13_g0_s0 trial13_g0_s1 trial13_g0_s2 trial13_g1_s0 trial13_g1_s1 trial13_g1_s2
+      trial13_g2_s0 trial13_g2_s1 trial13_g2_s2 trial13_g3_s0 trial13_g3_s1 trial13_g3_s2)
+OUT_ROOT=runs/trial14_calibration
+CACHE_DIR=data/trial10_reference
+
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.trial14_calibrate.live.log"
+echo "live log: $LIVE_LOG"
+
+{
+    if [ ! -f "$CACHE_DIR/manifest.json" ]; then
+        echo "[calibrate] no reference cache at $CACHE_DIR -- run pbs/trial10_build.pbs first" >&2
+        exit 1
+    fi
+
+    # The cache on the node's local disk: every window is a random-access read.
+    STAGED_CACHE="${TMPDIR:?not set -- submit with qsub}/trial10_reference"
+    echo "[stage] $CACHE_DIR ($(du -sh "$CACHE_DIR" | cut -f1)) -> $STAGED_CACHE"
+    SECONDS=0
+    cp -r "$CACHE_DIR" "$STAGED_CACHE"
+    echo "[stage] copied in ${SECONDS}s"
+
+    DONE_DIRS=()
+    for run in "${RUNS[@]}"; do
+        ckpt="runs/$run/best.ckpt"
+        out="$OUT_ROOT/$run/evaluation.json"
+        if [ ! -f "$ckpt" ]; then
+            echo "[calibrate] MISSING $ckpt -- skipped"
+            continue
+        fi
+
+        # A resubmitted job skips what an earlier one finished.
+        if [ ! -f "$out" ]; then
+            echo "=== $run"
+            uv run --frozen python -m pnpl2026.trial14.cli.evaluate --ckpt "$ckpt" \
+                --cache-dir "$STAGED_CACHE" --out "$out" --dump --num-workers 8 \
+                --protocols chunked fragment reference
+        fi
+        DONE_DIRS+=("$OUT_ROOT/$run")
+    done
+
+    uv run --frozen python -m pnpl2026.trial14.cli.calibrate --runs "${DONE_DIRS[@]}" \
+        --leaderboard configs/trial13/leaderboard.csv --ensembles configs/trial14/ensembles.csv \
+        --submissions-dir submissions
+} 2>&1 | tee "$LIVE_LOG"

@@ -1,0 +1,9 @@
+configs/trial14/h0_head_only.yaml 0
+configs/trial14/h0_head_only.yaml 1
+configs/trial14/h0_head_only.yaml 2
+configs/trial14/h1_joint.yaml 0
+configs/trial14/h1_joint.yaml 1
+configs/trial14/h1_joint.yaml 2
+configs/trial14/h2_control.yaml 0
+configs/trial14/h2_control.yaml 1
+configs/trial14/h2_control.yaml 2

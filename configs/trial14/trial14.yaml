@@ -1,0 +1,101 @@
+# Trial 14: G2 plus a trained 50-word head, judged on holdout-shaped chunks
+# (Variant H). This file IS H1: every run starts from its seed's G2
+# checkpoint, adds the 50-word head, and fine-tunes both the head and the
+# network with both losses. The run files change what trains.
+#
+# Layer order:  base.yaml -> trial14/trial14.yaml -> trial14/hpc.yaml -> one
+# run file. model_kwargs merges key by key (trial14/config.py).
+#
+# Reads trial 10's cache and t5 table and trial 13's G2 checkpoints; builds
+# none of them. See src/pnpl2026/trial14/info/variant-h.md.
+
+# ⚠️ every run file overrides this
+run_name: trial14
+
+model: trial14_reference
+
+# -- data: trial 10's reference cache, 306 sensors at 50 Hz --------------------
+cache_dir: data/trial10_reference
+word_embeddings: data/word_embeddings_t5_all.npz
+centre_embeddings: false
+n_channels: 306
+sfreq: 50
+tmin: 0.0
+tmax: 3.0
+clamp: 5.0
+baseline_seconds: 0.5
+token_set: all
+max_tokens: 64
+siglip_dedup: true
+
+# -- G2's training items: a tenth of sentences served as one word with 1 s ------
+fragment_p: 0.0
+isolated_p: 0.1
+fragment_lengths: [3, 1, 3, 25, 56, 38, 24, 12, 3]
+
+# -- selection: the chunked protocol on pnpl's validation partition -----------
+# Every validation word, in holdout-shaped chunks; val/bacc10 is the blend.
+selection_protocol: chunked
+
+# -- start: each seed from its own G2 parent ------------------------------------
+init_checkpoint: runs/trial13_g2_s{seed}/best.ckpt
+
+# -- the 50-word head ---------------------------------------------------------------
+# Both losses: D-SigLIP keeps retrieval trained; the head's cross-entropy is
+# logit-adjusted (tau 1), which makes its plain logits rank for balanced
+# accuracy without class weights.
+freeze_backbone: false
+semantic_weight: 1.0
+closed_weight: 1.0
+closed_dropout: 0.1
+logit_adjust_tau: 1.0
+label_smoothing: 0.0
+# Scored as half head, half retrieval (log-probabilities). cli.collate reports
+# the weight best on the validation chunks; predict --closed-weight uses it.
+inference_closed_weight: 0.5
+
+model_kwargs:
+  # -- G2's network, unchanged: trial 10's encoder and F1's 4 x 256 transformer --
+  spatial: merger
+  merger_channels: 270
+  merger_pos_dim: 2048
+  merger_dropout: 0.2
+  initial_linear: 270
+  subject_layer: true
+  hidden: 160
+  depth: 10
+  kernel_size: 3
+  dilation_growth: 2
+  dilation_period: 5
+  batch_norm: true
+  skip: true
+  glu: 2
+  glu_context: 1
+  d_model: 256
+  sentence_depth: 4
+  n_heads: 8
+  ffn_expansion: 4
+  attention_dropout: 0.1
+  dropout: 0.0
+  drop_path: 0.0
+
+# -- fine-tuning schedule ---------------------------------------------------------
+# ⚠️ Exponents with a decimal point: PyYAML loads `1e-4` as a STRING.
+# The network moves gently from G2's weights; the new head moves fast.
+lr: 3.0e-5
+head_lr: 1.0e-3
+weight_decay: 0.01
+warmup_fraction: 0.05
+min_lr: 0.0
+max_epochs: 15
+patience: 5
+
+# SENTENCES per batch; an isolated item still counts as one.
+batch_size: 64
+
+ema_decay: 0.0
+jitter_seconds: 0.0
+
+precision: "32"
+matmul_precision: high
+num_workers: 4

@@ -1,0 +1,3 @@
+# H1 -- trial14.yaml as it stands: head and network fine-tuned together, both
+# losses. Does training the network for the head's sake add to H0?
+run_name: trial14_h1

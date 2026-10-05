@@ -1,0 +1,255 @@
+"""Average several submission CSVs into one ensemble submission.
+
+    PYTHONPATH=src python -m pnpl2026.trial14.cli.ensemble \\
+        --inputs submissions/trial10_f1_s0_in_context.csv \\
+                 submissions/trial10_f3_s0_in_context.csv ... \\
+        --out submissions/ensemble_t10t12_in_context.csv
+
+Per input file and per row, the 50 log-probabilities are z-scored across the
+words (which removes each model's own temperature), averaged over the files,
+and turned back into a distribution with a softmax. The Moses columns are
+treated the same way. Ranking is all BAcc@k reads; the softmax only makes the
+rows valid distributions again.
+
+    --column-normalise   off by default. After averaging, z-score each word's
+                         column across the rows of each holdout source
+                         (sentence, isolated), so no word is in every top 10
+                         and none is in no top 10. ⚠️ It uses all holdout rows
+                         jointly -- the inputs only, never a label -- and the
+                         rules do not say whether that is allowed. Needs the
+                         holdout files, for which row is which source
+
+Why ensemble: on the holdout, trial 10/12 models with equal local scores agree
+on only 30-48% of their top-1 picks, so their errors are far from identical.
+
+⚠️ ROW ORDERING IS THE WHOLE CONTRACT. Every input must carry the canonical
+`index` column 0..N-1 in order, and the output keeps it. Any mismatch stops
+the script before anything is written.
+
+Light: it reads CSVs only, so it runs on a login node or a laptop.
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+#the CSV's first column, the canonical row number
+INDEX_COLUMN = "index"
+
+#write_submission's prefix for the secondary (Moses) columns
+MOSES_PREFIX = "moses_"
+
+#floor before the log: a probability of exactly 0 would give -inf
+PROBABILITY_FLOOR = 1e-12
+
+
+def parse_args():
+    """Command-line arguments for ensembling."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--inputs", nargs="+", required=True, help="submission CSVs to average")
+    parser.add_argument("--out", required=True, help="the ensemble CSV to write")
+    parser.add_argument(
+        "--column-normalise",
+        action="store_true",
+        help="z-score each word's column within each holdout source (uses all holdout rows jointly)",
+    )
+    parser.add_argument("--track", default="deep", help="competition track, for the source of each row")
+    parser.add_argument(
+        "--holdout-dir",
+        default=None,
+        help="folder holding COMPETITION_HOLDOUT/; needed by --column-normalise",
+    )
+    parser.add_argument("--force", action="store_true", help="overwrite --out if it exists")
+    return parser.parse_args()
+
+
+def read_submission(path, primary_words, moses_words):
+    """One submission CSV as arrays, after checking its columns.
+
+    ARGS:
+        path (Path): a CSV written by write_submission
+        primary_words (list): the competition's 50 words, in column order
+        moses_words (list): the Moses 50 words, in column order
+
+    RETURNS:
+        index : [N] int64, the canonical row numbers
+        primary : [N, 50] float64 probabilities
+        moses : [N, 50] float64 probabilities
+    """
+    table = pd.read_csv(path)
+
+    #⚠️ the header must be exactly what write_submission writes, in order: a
+    #CSV from another vocabulary would average the wrong words together
+    expected = [INDEX_COLUMN] + list(primary_words) + [MOSES_PREFIX + word for word in moses_words]
+    if list(table.columns) != expected:
+        raise SystemExit(f"{path}: columns are not the competition's index + primary + moses layout.")
+
+    index = table[INDEX_COLUMN].to_numpy(dtype=np.int64)
+    primary = table[list(primary_words)].to_numpy(dtype=np.float64)
+    moses = table[[MOSES_PREFIX + word for word in moses_words]].to_numpy(dtype=np.float64)
+    return index, primary, moses
+
+
+def standardise_rows(probabilities):
+    """Log-probabilities z-scored across each row's words.
+
+    ARGS:
+        probabilities (np.ndarray): [N, n_words], each row a distribution
+
+    RETURNS:
+        [N, n_words] float64 - zero mean and unit spread per row
+    """
+    #axis=1 is the word axis: each row is ranked on its own
+    logs = np.log(np.maximum(probabilities, PROBABILITY_FLOOR))
+    centred = logs - logs.mean(axis=1, keepdims=True)
+    spread = centred.std(axis=1, keepdims=True)
+
+    #a perfectly flat row has no ranking; leave it flat rather than divide by 0
+    return centred / np.where(spread > 0, spread, 1.0)
+
+
+def normalise_columns(scores, groups):
+    """Z-score each word's column across the rows of each group.
+
+    ARGS:
+        scores (np.ndarray): [N, n_words]
+        groups (np.ndarray): [N] group label per row (the holdout source)
+
+    RETURNS:
+        [N, n_words] float64
+    """
+    out = np.empty_like(scores)
+    for group in np.unique(groups):
+        rows = groups == group
+
+        #axis=0 is the row axis: each word is compared with itself across rows
+        block = scores[rows]
+        centred = block - block.mean(axis=0, keepdims=True)
+        spread = centred.std(axis=0, keepdims=True)
+        out[rows] = centred / np.where(spread > 0, spread, 1.0)
+    return out
+
+
+def softmax_rows(scores):
+    """Scores back to one distribution per row.
+
+    ARGS:
+        scores (np.ndarray): [N, n_words]
+
+    RETURNS:
+        [N, n_words] float64, rows summing to 1
+    """
+    #subtract the row maximum first, so exp never overflows; axis=1 is words
+    shifted = scores - scores.max(axis=1, keepdims=True)
+    weights = np.exp(shifted)
+    return weights / weights.sum(axis=1, keepdims=True)
+
+
+def holdout_sources(track, holdout_dir, n_rows):
+    """The source ("sentence" or "word") of every canonical row.
+
+    ARGS:
+        track (str): "deep" is subject 0
+        holdout_dir (str or None): local COMPETITION_HOLDOUT/ parent
+        n_rows (int): rows in the submissions, checked against the loader
+
+    RETURNS:
+        [n_rows] array of str
+    """
+    from pnpl.competition import LibriBrainCompetitionHoldout
+
+    holdout = LibriBrainCompetitionHoldout(track=track, data_path=holdout_dir)
+
+    #⚠️ the loader's own metadata decides which row is which; never a range
+    if len(holdout.metadata) != n_rows:
+        raise SystemExit(f"The submissions have {n_rows} rows; the holdout loader lists {len(holdout.metadata)}.")
+    for position, meta in enumerate(holdout.metadata):
+        if meta["index"] != position:
+            raise SystemExit(f"Holdout metadata row {position} carries index {meta['index']}.")
+    return np.array([meta["source"] for meta in holdout.metadata])
+
+
+def describe(name, probabilities, sources=None):
+    """One line on how a prediction matrix spreads over the 50 words.
+
+    ARGS:
+        name (str): label for the line
+        probabilities (np.ndarray): [N, 50]
+        sources (np.ndarray or None): [N] source per row, for a per-source split
+
+    RETURNS:
+        str
+    """
+    parts = []
+    groups = [("all", np.ones(len(probabilities), dtype=bool))]
+    if sources is not None:
+        groups += [(source, sources == source) for source in np.unique(sources)]
+    for label, rows in groups:
+        #share of rows in which each word reaches the top 10; 0.20 when even
+        top10 = np.argsort(-probabilities[rows], axis=1)[:, :10]
+        occupancy = np.bincount(top10.ravel(), minlength=probabilities.shape[1]) / rows.sum()
+        distinct = len(np.unique(probabilities[rows].argmax(axis=1)))
+        parts.append(f"{label}: top-1 covers {distinct}, top-10 share {occupancy.min():.3f}-{occupancy.max():.3f}")
+    return f"[ensemble] {name}: " + "; ".join(parts)
+
+
+def main():
+    """Read, check, average, optionally normalise, and write."""
+    args = parse_args()
+    from pnpl.competition import load_vocabulary, write_submission
+
+    out_path = Path(args.out)
+    if out_path.exists() and not args.force:
+        raise SystemExit(f"{out_path} exists; pass --force to overwrite it.")
+    if len(set(args.inputs)) != len(args.inputs):
+        raise SystemExit("An input is listed twice; it would count double in the average.")
+
+    primary_words, moses_words = load_vocabulary("primary"), load_vocabulary("moses")
+    loaded = [read_submission(Path(path), primary_words, moses_words) for path in args.inputs]
+
+    #⚠️ every file must hold the canonical rows 0..N-1 in order
+    index = loaded[0][0]
+    if not np.array_equal(index, np.arange(len(index))):
+        raise SystemExit(f"{args.inputs[0]}: the index column is not 0..{len(index) - 1} in order.")
+    for path, (other, _, _) in zip(args.inputs, loaded):
+        if not np.array_equal(other, index):
+            raise SystemExit(f"{path}: its index column differs from {args.inputs[0]}'s.")
+
+    #the source of each row, needed only to normalise columns within a source
+    sources = None
+    if args.column_normalise:
+        sources = holdout_sources(args.track, args.holdout_dir, len(index))
+
+    #[n_files, N, 50] -> [N, 50]: axis 0 is the file axis
+    primary_scores = np.mean([standardise_rows(primary) for _, primary, _ in loaded], axis=0)
+    moses_scores = np.mean([standardise_rows(moses) for _, _, moses in loaded], axis=0)
+    if args.column_normalise:
+        primary_scores = normalise_columns(primary_scores, sources)
+        moses_scores = normalise_columns(moses_scores, sources)
+    primary, moses = softmax_rows(primary_scores), softmax_rows(moses_scores)
+
+    #how far each input's top-1 sits from the ensemble's
+    for path, (_, single, _) in zip(args.inputs, loaded):
+        agreement = np.mean(single.argmax(axis=1) == primary.argmax(axis=1))
+        print(f"[ensemble] {Path(path).name}: top-1 agrees with the ensemble on {100 * agreement:.1f}% of rows")
+    print(describe("ensemble", primary, sources))
+
+    #⚠️ DO NOT REMOVE: the same checks predict makes before writing
+    for name, table in (("primary", primary), ("moses", moses)):
+        sums = table.sum(axis=1)
+        if not np.isfinite(table).all() or not np.allclose(sums, 1.0, atol=1e-6):
+            raise SystemExit(f"{name} rows are not distributions (sums {sums.min():.6f}..{sums.max():.6f}).")
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    write_submission(str(out_path), indices=index, primary_probs=primary, secondary_probs=moses)
+    print(f"[ensemble] wrote {out_path}: {len(index)} rows from {len(args.inputs)} files"
+          + (", columns normalised per source" if args.column_normalise else ""))
+    print("[ensemble] submission is MANUAL, through the competition web UI.")
+
+
+if __name__ == "__main__":
+    main()

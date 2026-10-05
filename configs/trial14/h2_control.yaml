@@ -1,0 +1,7 @@
+# H2 -- the control: the same fine-tuning from G2 with NO head -- D-SigLIP
+# alone, the same epochs, rates and chunked-protocol selection -- scored by
+# retrieval alone. Separates "a head helps" from "more training helps".
+run_name: trial14_h2
+
+closed_weight: 0.0
+inference_closed_weight: 0.0

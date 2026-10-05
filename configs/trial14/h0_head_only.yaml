@@ -1,0 +1,8 @@
+# H0 -- the head alone: G2's network frozen (dropout off, BatchNorm statistics
+# fixed), only the 50-word head trains, on G2's own features. What a head is
+# worth with nothing else changed.
+run_name: trial14_h0
+
+freeze_backbone: true
+semantic_weight: 0.0
+closed_weight: 1.0
