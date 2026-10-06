@@ -186,5 +186,23 @@ Mixing recipes pays: adding trial 10/12's whole-sentence pair (F1, w1024)
 gained about 2 on both G2 and G1 + G2. Adding G3, which combines G1's and
 G2's switches, cost 3. Giving the F1 + w1024 pair a third of the vote
 instead of a quarter scored 1.5 lower: more weight on two models is not more
-diversity. Next: seeds 1-2 of F1 and w1024. Each step is near the leaderboard's ±2 noise, and the
+diversity. Each step is near the leaderboard's ±2 noise, and the
 best is the maximum of ~15 tries, so expect it to read a little high.
+
+### Adding to the 66.39 ensemble (2026-10-06) — every addition lost
+
+| added to G1 + G2 + F1 + w1024 | models | LB | vs 66.39 |
+|---|---|---|---|
+| F1 s1-2 + w1024 s1-2 (new seeds) | 12 | 62.01 | −4.4 |
+| F1 s1-2 | 10 | 63.26 | −3.1 |
+| w1024 s1-2 | 10 | 61.57 | −4.8 |
+| d16 | 9 | 63.52 | −2.9 |
+| F3 | 9 | 63.82 | −2.6 |
+| d16 + F3 | 10 | 64.17 | −2.2 |
+
+Adding one model at a ninth of the vote moved the score 2-3 points, and
+adding more seeds of the very recipes that gained on 2026-10-05 lost 3-5. Two
+readings, not yet separated: the new seeds are individually weaker on the
+holdout than the lucky s0 runs (F1 58.0, w1024 61.3), or 66.39 was itself a
+lucky draw from ~20 tries and ensemble variants swing ±3 by chance. Either
+way, choosing ensemble members on the leaderboard has hit its noise limit.

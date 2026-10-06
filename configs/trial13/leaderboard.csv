@@ -33,3 +33,9 @@ ens_g1g2_f1w1024,in_context,66.387,2026-10-05,ens_g1g2_f1w1024_in_context.csv
 ens_g2_f1w1024,in_context,65.475,2026-10-05,ens_g2_f1w1024_in_context.csv
 ens_g1g2g3,in_context,61.271,2026-10-05,ens_g1g2g3_in_context.csv
 ens_recipes_g1_g2_v2,in_context,64.923,2026-10-05,ens_recipes_g1_g2_v2_in_context.csv
+ens_best_seeds,in_context,62.006,2026-10-06,ens_best_seeds_in_context.csv
+ens_best_f1seeds,in_context,63.256,2026-10-06,ens_best_f1seeds_in_context.csv
+ens_best_w1024seeds,in_context,61.571,2026-10-06,ens_best_w1024seeds_in_context.csv
+ens_best_d16,in_context,63.523,2026-10-06,ens_best_d16_in_context.csv
+ens_best_f3,in_context,63.821,2026-10-06,ens_best_f3_in_context.csv
+ens_best_d16f3,in_context,64.173,2026-10-06,ens_best_d16f3_in_context.csv

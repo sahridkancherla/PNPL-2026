@@ -1,0 +1,5 @@
+# I1 -- trial 13's G1 (half of each epoch's sentences served as holdout-like
+# fragments) with per-window input normalisation. Compare with G1, seed for seed.
+run_name: trial15_i1
+
+fragment_p: 0.5

@@ -1,0 +1,6 @@
+# I2 -- trial 13's G2 (a tenth of sentences served as one word alone with
+# exactly 1 s) with per-window input normalisation. Compare with G2, seed for
+# seed.
+run_name: trial15_i2
+
+isolated_p: 0.1

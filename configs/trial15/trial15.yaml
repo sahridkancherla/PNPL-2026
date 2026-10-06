@@ -1,0 +1,94 @@
+# Trial 15: G1 and G2 with per-window input normalisation (Variant I). This
+# file is trial 13's trial13.yaml -- F1's sizes, fragment-protocol selection --
+# plus ONE change: input_norm: instance under model_kwargs. Each run file adds
+# trial 13's holdout-shaped training items, so I1 compares with G1 and I2 with
+# G2, seed for seed.
+#
+# Layer order:  base.yaml -> trial15/trial15.yaml -> trial15/hpc.yaml -> one
+# run file. model_kwargs merges key by key (trial15/config.py).
+#
+# Reads trial 10's cache and t5 table; builds neither. See
+# src/pnpl2026/trial15/info/variant-i.md.
+
+# ⚠️ every run file overrides this
+run_name: trial15
+
+model: trial15_reference
+
+# -- data: trial 10's reference cache, 306 sensors at 50 Hz --------------------
+cache_dir: data/trial10_reference
+word_embeddings: data/word_embeddings_t5_all.npz
+centre_embeddings: false
+n_channels: 306
+sfreq: 50
+
+# 3 s from each word's onset; per window, clip to +/-5, standardise (below),
+# then subtract each channel's mean over the first 0.5 s.
+tmin: 0.0
+tmax: 3.0
+clamp: 5.0
+baseline_seconds: 0.5
+
+# Every word of a sentence is a token and a t5 target.
+token_set: all
+max_tokens: 64
+siglip_dedup: true
+
+# -- selection: the fragment protocol on pnpl's validation partition ----------
+# As trial 13, so I1/I2 are selected exactly as G1/G2 were.
+selection_protocol: fragment
+
+# -- holdout-shaped training: off here; each run file switches one on --------
+fragment_p: 0.0
+isolated_p: 0.0
+fragment_lengths: [3, 1, 3, 25, 56, 38, 24, 12, 3]
+
+model_kwargs:
+  # -- trial 15's change: each window standardised per channel by its own
+  # mean and spread over its real samples, after the first clamp ------------
+  input_norm: instance
+
+  # -- per-word encoder: trial 10's, brainmagick's SimpleConv ------------------
+  spatial: merger
+  merger_channels: 270
+  merger_pos_dim: 2048
+  merger_dropout: 0.2
+  initial_linear: 270
+  subject_layer: true
+  hidden: 160
+  depth: 10
+  kernel_size: 3
+  dilation_growth: 2
+  dilation_period: 5
+  batch_norm: true
+  skip: true
+  glu: 2
+  glu_context: 1
+
+  # -- the sentence transformer at F1's size: 4 x 256 x 8 heads (5.85M total) --
+  d_model: 256
+  sentence_depth: 4
+  n_heads: 8
+  ffn_expansion: 4
+  attention_dropout: 0.1
+  dropout: 0.0
+  drop_path: 0.0
+
+# -- schedule: trial 10's ---------------------------------------------------------
+# ⚠️ Exponents with a decimal point: PyYAML loads `1e-4` as a STRING.
+lr: 1.0e-4
+weight_decay: 0.01
+warmup_fraction: 0.01
+min_lr: 0.0
+max_epochs: 50
+patience: 10
+
+# SENTENCES per batch; a fragment or isolated item still counts as one.
+batch_size: 64
+
+ema_decay: 0.0
+jitter_seconds: 0.0
+
+precision: "32"
+matmul_precision: high
+num_workers: 4
