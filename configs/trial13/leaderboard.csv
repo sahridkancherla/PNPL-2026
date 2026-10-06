@@ -41,3 +41,4 @@ ens_best_f3,in_context,63.821,2026-10-06,ens_best_f3_in_context.csv
 ens_best_d16f3,in_context,64.173,2026-10-06,ens_best_d16f3_in_context.csv
 trial13_g2_ens,in_context_wp,62.584,2026-10-06,trial13_g2_ens_in_context_wp.csv
 ens_g1g2_f1w1024,in_context_wp,64.088,2026-10-06,ens_g1g2_f1w1024_in_context_wp.csv
+ens_g1g2_f1w1024,in_context_wpgap,62.755,2026-10-06,ens_g1g2_f1w1024_in_context_wpgap.csv

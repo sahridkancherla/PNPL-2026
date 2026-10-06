@@ -194,4 +194,11 @@ at **66.3% BAcc@10** (validation pairs, prior divided out). A gap-aware
 version -- per pair, the adjacent and the skip-one transition tables weighted
 by how likely each is given that pair's onset gap -- is the fix, if pursued.
 
+**The gap-aware version did worse: 62.76** on the 66.39 ensemble (−3.6;
+adjacency-only had lost 2.3). Three fusions, three losses. **The word-pair
+fusion is abandoned.** The likely reading: the models' own sentence
+transformer already uses the neighbours, so an outside chain mostly adds a
+second, mis-calibrated vote; whatever its local gains (+1 to +2 on context
+words), they do not survive the holdout.
+
 Pending: `runs/trial15_results.md` and I1/I2's 3-seed ensembles.
