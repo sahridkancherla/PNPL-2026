@@ -9,17 +9,28 @@ chosen from a literature search on 2026-10-06.
 ## Part 1 — the word-pair model (no training)
 
 **What the models do not know.** Every holdout "sentence" is a run of 4–9
-consecutive words that are *all* in the 50-word list (156 runs, 868 of 960
-rows). Every model so far trained on narrative, where most neighbours are
-unscored words, so none knows that constraint. If word 3 of a run is "the",
-word 4 can only be one of the few list words that directly follow "the".
+words that are *all* in the 50-word list (156 runs, 868 of 960 rows), most
+neighbours directly adjacent in the speech and about a third with one
+unscored word between (see Results). Every model so far trained on
+narrative, where most neighbours are unscored words, so none knows that
+structure. If word 3 of a run is "the", word 4 can only be one of the few list
+words that follow "the" directly or one word later.
 
-**The model.** `cli.wordpairs` counts how often each list word directly
-follows another within a sentence of subject 0's own **training**
-transcripts (the cache's word tables — no MEG, no outside text), smooths each
-row toward the overall next-word distribution (pseudo-counts chosen on the
-validation transcripts), and saves the transition matrix with its stationary
-distribution.
+**The model.** `cli.wordpairs` counts, within sentences of subject 0's own
+**training** transcripts (the cache's word tables — no MEG, no outside text),
+how often each list word directly follows another (adjacent pairs) and how
+often it is the next list word with exactly one unlisted word between
+(skip-one pairs). Each table's rows are smoothed toward the overall
+next-word distribution (pseudo-counts chosen on the validation transcripts),
+and each kind's onset gaps get a log-normal model.
+
+**Gap-aware chain** (the second version, after the first lost on the
+leaderboard). Each neighbouring pair of a holdout run gets its own transition
+matrix: the adjacent and skip-one tables mixed by P(adjacent | the pair's
+onset gap). That probability comes from the two gap models, shifted by one
+global speech-rate factor, and the share of adjacent pairs; both are fitted on
+the holdout's own gaps by maximum likelihood (inputs only, never labels). The
+first version, every pair adjacent, survives as `--transitions adjacent`.
 
 **The fusion.** `cli.fuse` runs forward–backward along each holdout run. Each
 word's score becomes its own evidence plus what the other words' evidence says
@@ -36,18 +47,21 @@ temperature on validation words, and **picks the setting on validation alone
 by a rule fixed in advance**: exact Bayes unless another setting beats it by
 more than 0.5 points.
 
+`cli.fuse_check` copies the holdout's structure locally (section B): chains of
+scored words in the chunked dumps that may skip one unscored word, each pair
+given an onset gap drawn from the gap model of its true kind, the mixture
+fitted on those gaps as `cli.fuse` fits the holdout's. It scores no fusion,
+the adjacency-only chain, the gap-aware chain and an oracle told each pair's
+kind, so the first version's failure should be visible locally too.
+
 **Evidence.** Language-model rescoring is the step d'Ascoli et al. name next
 for the decoder our models copy; "Unlocking Non-Invasive Brain-to-Text"
 (arXiv 2505.13446) and a 2026 listened-speech MEG decoder (arXiv 2609.31997,
 neural top-10 gating plus GPT-2 next-word probabilities) both gain from it.
 Here the model is smaller and the constraint stronger: 50 words, all-list runs.
 
-**Assumption to confirm** before trusting it: the holdout's runs are directly
-adjacent words. Inside its runs, onset gaps are 0.07 / 0.14 / 0.21 / 0.34 /
-0.57 s (5/25/50/75/95%, 712 gaps), measured from the real holdout files.
-`cli.wordpairs --holdout-dir` prints the training transcripts' gaps for
-adjacent pairs beside those across one unscored word: the holdout's should
-match the first.
+⚠️ A pair with two or more unscored words between is treated as skip-one;
+only 0.6% of the holdout's gaps are over 0.8 s, so such pairs are rare.
 
 ⚠️ Like the in-context mode, the fusion reads the other words of a run (their
 scores) to score each word; the rules do not settle whether that is allowed.
@@ -84,6 +98,7 @@ From the repo root on CX3.
 git pull
 
 # Part 1 -- login node, CPU, about a minute in all
+# the table (rebuild after any change to wordpairs.py: the file format grew)
 uv run python -m src.pnpl2026.trial15.cli.wordpairs --holdout-dir data/holdout
 C=runs/trial14_calibration
 uv run python -m src.pnpl2026.trial15.cli.fuse_check \
@@ -91,8 +106,11 @@ uv run python -m src.pnpl2026.trial15.cli.fuse_check \
     --runs $C/trial13_g1_s0 $C/trial13_g1_s1 $C/trial13_g1_s2 \
            $C/trial13_g2_s0 $C/trial13_g2_s1 $C/trial13_g2_s2 \
            $C/trial10_f1_s0 $C/trial12_w1024_s0
-# -> runs/trial15_fuse_check.md; its last line is the cli.fuse command to run
-#    (writes submissions/ens_g1g2_f1w1024_in_context_wp.csv)
+# -> runs/trial15_fuse_check.md. The gate: in section B's (chosen) rows,
+#    gap-aware above `before` on chunked validation AND test
+grep "chunked | validation\|chunked | test" runs/trial15_fuse_check.md | grep chosen
+# the fuse command the check wrote -> submissions/ens_g1g2_f1w1024_in_context_wpgap.csv
+CMD=$(grep "cli.fuse --csv" runs/trial15_fuse_check.md); echo "$CMD"; eval "$CMD"
 
 # Part 2 -- six GPU runs, one array wave, each ~1.5-2.5 h on an RTX6000
 qsub -J 1-6 pbs/trial15.pbs
@@ -122,6 +140,15 @@ same tokens.
 - **`cli.fuse_check`** on fabricated dumps from a known chain: +9–15 points on context words,
   temperature fitted, exact Bayes chosen on validation; on a chance-level run
   it warns that the temperature sits at the edge of its grid
+- **gap-aware version** (2026-10-06, second build): `fuse_run` with a
+  different chain per step equals brute force to 1e-15; the gap mixture
+  recovers a planted speech-rate shift and adjacent share (0.16 / 0.71 for a
+  true 0.15 / 0.70) and, in `fuse_check`'s section B on fabricated dumps, the
+  true adjacent share (0.72 fitted, 0.69–0.71 true); skip-one pairs counted
+  only across exactly one unscored word; chains cross one unscored token and
+  break at two or at a sequence edge; `cli.fuse --transitions gap` on the real
+  holdout layout keeps every CSV check above, and warns when the mixture sits
+  at the edge of its grid (gap models that do not fit the holdout)
 - **shape check**, prime dimensions: per-window statistics over real samples
   only (mean 0, spread 1), padding exactly 0 and never read; a per-channel gain
   and offset change nothing with "instance" and do change "none"; batch of one
@@ -134,5 +161,37 @@ same tokens.
 
 ## Results
 
-Pending: `runs/trial15_fuse_check.md`, the fused 66.39 ensemble's leaderboard
-score, `runs/trial15_results.md`, and I1/I2's 3-seed ensembles.
+### Part 1 — the fusion lowered both leaderboard scores (2026-10-06)
+
+| submission | plain | fused (`_wp`) | change |
+|---|---|---|---|
+| G2 ensemble | 63.41 | 62.58 | −0.8 |
+| G1 + G2 + F1 + w1024 | 66.39 | 64.09 | −2.3 |
+
+Both moved down; each change is within about one leaderboard noise band
+(~±2), but two of two in the same direction is a negative result: the
+word-pair fusion as built does not help on the holdout. Recorded in
+`configs/trial13/leaderboard.csv` with mode `in_context_wp`, so calibrate
+leaves them out.
+
+**Likely cause: the adjacency assumption is wrong for about a third of the
+holdout's pairs.** `cli.wordpairs` on the real cache (97,618 training pairs):
+
+| onset gap, s (5/25/50/75/95%) | | | | | |
+|---|---|---|---|---|---|
+| adjacent scored words, training | 0.06 | 0.10 | 0.14 | 0.18 | 0.32 |
+| across one unscored word, training | 0.28 | 0.40 | 0.50 | 0.70 | 1.16 |
+| holdout, inside its runs | 0.07 | 0.14 | 0.21 | 0.34 | 0.57 |
+
+Only 5% of adjacent training pairs are over 0.32 s apart; over a quarter of
+the holdout's are. As a two-part mixture that is roughly 30% of holdout pairs
+with a skipped word between them (slower speech in the unrevealed sources
+may explain part of the shift, not the heavy tail). The chain then imposed
+"b directly follows a" where it does not hold, with full confidence.
+
+The information itself is strong: the TRUE previous word alone names the next
+at **66.3% BAcc@10** (validation pairs, prior divided out). A gap-aware
+version -- per pair, the adjacent and the skip-one transition tables weighted
+by how likely each is given that pair's onset gap -- is the fix, if pursued.
+
+Pending: `runs/trial15_results.md` and I1/I2's 3-seed ensembles.
