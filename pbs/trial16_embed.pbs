@@ -1,0 +1,76 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=32gb
+#PBS -l walltime=04:00:00
+#PBS -N pnpl-trial16-embed
+#PBS -j oe
+#PBS -o logs/
+
+# Variant K's candidate second tables: every word in trial 10's reference
+# cache, encoded alone by t5-large and read at hidden states 3, 6 and 18
+# (trial 10's table is state 12, the middle of 25). One table per layer:
+#
+#     data/word_embeddings_t5_layer3.npz
+#     data/word_embeddings_t5_layer6.npz
+#     data/word_embeddings_t5_layer18.npz
+#
+# Run before the K lines of pbs/trial16.pbs; K0 does not need it. Then pick
+# the layer on a login node (seconds):
+#
+#     qsub pbs/trial16_embed.pbs
+#     PYTHONPATH=src .venv/bin/python -m pnpl2026.trial16.cli.hub_check \
+#         --candidates data/word_embeddings_t5_layer3.npz \
+#                      data/word_embeddings_t5_layer6.npz \
+#                      data/word_embeddings_t5_layer18.npz
+#
+# Trial 10's builder does the encoding, run as a command, never imported. Its
+# output path comes from `word_embeddings` in its config, so each layer gets a
+# one-line config layer naming its own file. A CPU job, as trial 10's: about
+# 20-40 min per layer.
+#
+# ⚠️ Needs, from a LOGIN node first, what pbs/trial10_embed.pbs needs:
+# transformers + sentencepiece in $HOME/t5libs, and t5-large in the Hugging
+# Face cache. If trial 10's table was built on this RDS, both are there.
+#
+# ⚠️ Submit from the repo root. `-o logs/` is resolved against where qsub ran.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+# t5libs first: transformers lives there and nowhere else.
+export PYTHONPATH="$HOME/t5libs:$PWD/src"
+export PYTHONUNBUFFERED=1
+export UV_OFFLINE=1
+# Offline: a compute node has no internet, so a cache miss must fail at once.
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+# One thread per core this job was given.
+export OMP_NUM_THREADS=8
+
+LAYERS=(3 6 18)
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.trial16_embed.live.log"
+echo "live log: $LIVE_LOG"
+
+{
+    if [ ! -f data/trial10_reference/manifest.json ]; then
+        echo "[embed] no reference cache -- run pbs/trial10_build.pbs first" >&2
+        exit 1
+    fi
+
+    for LAYER in "${LAYERS[@]}"; do
+        OUT="data/word_embeddings_t5_layer${LAYER}.npz"
+        if [ -f "$OUT" ]; then
+            echo "[embed] $OUT exists; skipped"
+            continue
+        fi
+
+        # The one config line that differs: where this layer's table goes.
+        LAYER_CONFIG="${TMPDIR:?not set -- submit with qsub}/embed_layer${LAYER}.yaml"
+        printf 'word_embeddings: "%s"\n' "$OUT" > "$LAYER_CONFIG"
+
+        # The project venv's python directly: `uv run` would re-sync it.
+        .venv/bin/python -m pnpl2026.trial10.cli.build_word_embeddings \
+            --config configs/base.yaml configs/trial10/trial10.yaml "$LAYER_CONFIG" \
+            --layer "$LAYER" --device cpu
+    done
+} 2>&1 | tee "$LIVE_LOG"

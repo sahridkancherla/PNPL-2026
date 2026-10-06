@@ -1,0 +1,18 @@
+# K -- K0 plus a second head: the same word vector mapped by a second
+# 256 -> 1024 layer, trained with its own D-SigLIP against an early t5-large
+# layer. Predictions average the two heads' row-standardised scores.
+#
+# ⚠️ The second table must exist on RDS before this runs: pbs/trial16_embed.pbs
+# builds it, and `cli.hub_check` picks the layer. If the check picks a layer
+# other than 6, change the path below. See info/variant-k.md.
+run_name: trial16_k
+
+baseline_seconds: 0.0
+jitter_seconds: 0.04
+ema_decay: 0.999
+
+second_embeddings: data/word_embeddings_t5_layer6.npz
+second_loss_weight: 1.0
+
+model_kwargs:
+  input_norm: instance

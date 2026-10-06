@@ -1,0 +1,6 @@
+configs/trial16/k.yaml 0
+configs/trial16/k.yaml 1
+configs/trial16/k.yaml 2
+configs/trial16/k0.yaml 0
+configs/trial16/k0.yaml 1
+configs/trial16/k0.yaml 2
