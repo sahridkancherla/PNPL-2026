@@ -1,4 +1,4 @@
-"""Reading trial 10's reference cache as token sequences, under three protocols."""
+"""Reading trial 10's reference cache as token sequences, under four protocols."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from .sequences import (
     Sequence,
     chunk_sizes,
     fragment_sequences,
+    isolated_sequences,
     reference_sequences,
     sparse_sequences,
     vocabulary_runs,
@@ -27,6 +28,7 @@ __all__ = [
     "collate_tokens",
     "describe",
     "fragment_sequences",
+    "isolated_sequences",
     "load_manifest",
     "normalise_word",
     "reference_sequences",

@@ -5,17 +5,19 @@
 #PBS -j oe
 #PBS -o logs/
 
-# Trial 15: trial 13's G1 and G2 with per-window input normalisation. Two
-# configs x three seeds, one per line of configs/trial15/runs.txt. From the
-# repo root:
+# Trial 15: trial 13's G1 and G2 with per-window input normalisation (lines
+# 1-6, I1 and I2), and the lone-word specialist I3 (lines 7-9), three seeds
+# each, one per line of configs/trial15/runs.txt. From the repo root:
 #
-#     qsub -J 1-6 pbs/trial15.pbs      every line, one array wave
+#     qsub -J 1-6 pbs/trial15.pbs      I1, I2 (finished 2026-10-07)
+#     qsub -J 7-9 pbs/trial15.pbs      I3, the lone-word specialist
 #     qsub -v RUN=<n> pbs/trial15.pbs  one line again: a rerun, or a resume
 #
 # Walltime: every run is F1-sized (5.85M), as trial 13's, which fitted in 4 h:
 # ~2.1 min per epoch on an RTX6000, plus ~10-20 min of end-of-run scoring
-# (three protocols x two partitions, with and without BatchNorm
+# (four protocols x two partitions, with and without BatchNorm
 # re-estimation, plus dumps). The per-window statistics cost next to nothing.
+# I3 reads one 1 s window per word, ~780k a epoch, at most 40 epochs.
 # --resume continues a killed run from last.ckpt.
 #
 # ⚠️ RTX6000 trains in fp16 ("16-mixed" in configs/trial15/hpc.yaml): Turing

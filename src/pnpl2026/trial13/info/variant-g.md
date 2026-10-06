@@ -236,5 +236,5 @@ Seed means ± half-range, BAcc@10 %; FRAG test is 128 words, frag val 239.
 
 **Deferred, in order:** train the final models on all 162 recordings; a
 stream (Zipformer-style) variant on this pipeline; test-time onset jitter.
-Multi-subject pretraining is **ruled out**: the deep track does not allow
-training on other subjects' data.
+Multi-subject pretraining was ruled out here under a subject-0-only rule;
+that rule was withdrawn on 2026-10-07 (see CLAUDE.md, data policy).

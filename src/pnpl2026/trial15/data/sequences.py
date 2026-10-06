@@ -13,8 +13,14 @@
                 vocabulary word of a sentence as tokens, the unscored words
                 between them skipped. It read ~27 for every run where the
                 leaderboard read 41-58, because the real holdout is dense runs
+    ISOLATED    trial 15: EVERY word alone, with exactly the holdout's 1 s --
+                the 92 lone words of the holdout, at the size of a whole
+                partition. Scores lone words on thousands of words instead of
+                the fragment protocol's ~25, and trains the lone-word
+                specialist (`training_protocol: isolated`)
 
-Trial 13 selects checkpoints on FRAGMENT and reports all three.
+Trial 13 selects checkpoints on FRAGMENT and reports the first three; trial 15
+adds ISOLATED.
 """
 
 from __future__ import annotations
@@ -129,6 +135,48 @@ def reference_sequences(tables, n_times, target_rows, window_samples, max_tokens
                         table["moses"][chosen].astype(np.int64),
                     )
                 )
+    return sequences
+
+
+def isolated_sequences(tables, n_times, target_rows, isolated_samples):
+    """Every word alone with exactly `isolated_samples`: the isolated protocol.
+
+    A word is kept when it has a t5 target or is scored, and its whole window
+    lies inside the recording. Each becomes a one-word sequence, flagged
+    isolated, its MEG stopping `isolated_samples` after its onset -- as the
+    holdout's 92 lone words are served.
+
+    ARGS:
+        tables (list): word tables, one per recording
+        n_times (list): samples per recording
+        target_rows (list): per recording, [n_words] t5 rows
+        isolated_samples (int): the window, 50 at 50 Hz
+
+    RETURNS:
+        list of Sequence
+    """
+    sequences = []
+    for recording, (table, length, rows) in enumerate(zip(tables, n_times, target_rows)):
+        onsets = table["onset_sample"]
+
+        #a word with nothing to learn or score from, or no room, is dropped
+        useful = (rows >= 0) | (table["primary"] >= 0)
+        keep = useful & (onsets >= 0) & (onsets + isolated_samples <= length)
+
+        #one sequence per kept word, in onset order
+        for position in np.flatnonzero(keep):
+            chosen = np.array([position])
+            sequences.append(
+                Sequence(
+                    recording,
+                    onsets[chosen],
+                    rows[chosen],
+                    table["primary"][chosen].astype(np.int64),
+                    table["moses"][chosen].astype(np.int64),
+                    True,
+                    isolated_samples,
+                )
+            )
     return sequences
 
 

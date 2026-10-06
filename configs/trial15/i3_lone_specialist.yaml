@@ -1,0 +1,17 @@
+# I3 -- the lone-word specialist. Every training word is served ALONE with
+# exactly 1 s, as the holdout's 92 lone words are, and checkpoints are picked
+# on the isolated protocol (every validation word alone, thousands of words).
+# Used only for the holdout's lone words: cli.ensemble --lone-inputs.
+# Per-window input normalisation comes from trial15.yaml; EMA is on, as in
+# every run from trial 15's specialist onwards.
+run_name: trial15_i3
+
+training_protocol: isolated
+selection_protocol: isolated
+
+# one word per item, so far more items per batch than whole sentences hold
+batch_size: 512
+max_epochs: 40
+patience: 8
+
+ema_decay: 0.999

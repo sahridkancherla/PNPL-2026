@@ -11,13 +11,19 @@ and turned back into a distribution with a softmax. The Moses columns are
 treated the same way. Ranking is all BAcc@k reads; the softmax only makes the
 rows valid distributions again.
 
+    --lone-inputs        a lone-word specialist's CSVs (trial 15's I3). The
+                         holdout's lone words (source "word") take the general
+                         ensemble and the specialist ensemble at EQUAL weight,
+                         each re-standardised first -- a rule fixed in
+                         advance, never fitted. Sentence rows are the general
+                         ensemble alone, unchanged. Uses each row's source,
+                         which the loader states per item: within the
+                         holdout principle. Needs the holdout files
     --column-normalise   off by default. After averaging, z-score each word's
-                         column across the rows of each holdout source
-                         (sentence, isolated), so no word is in every top 10
-                         and none is in no top 10. ⚠️ It uses all holdout rows
-                         jointly -- the inputs only, never a label -- and the
-                         rules do not say whether that is allowed. Needs the
-                         holdout files, for which row is which source
+                         column across the rows of each holdout source, so no
+                         word is in every top 10 and none is in no top 10.
+                         ⚠️ It pools all holdout rows: against the holdout
+                         principle (CLAUDE.md); never for a final pick
 
 Why ensemble: on the holdout, trial 10/12 models with equal local scores agree
 on only 30-48% of their top-1 picks, so their errors are far from identical.
@@ -53,15 +59,21 @@ def parse_args():
     parser.add_argument("--inputs", nargs="+", required=True, help="submission CSVs to average")
     parser.add_argument("--out", required=True, help="the ensemble CSV to write")
     parser.add_argument(
+        "--lone-inputs",
+        nargs="+",
+        default=None,
+        help="a lone-word specialist's CSVs, mixed in at equal weight on the holdout's lone words only",
+    )
+    parser.add_argument(
         "--column-normalise",
         action="store_true",
-        help="z-score each word's column within each holdout source (uses all holdout rows jointly)",
+        help="z-score each word's column within each holdout source (pools all holdout rows: against the principle)",
     )
     parser.add_argument("--track", default="deep", help="competition track, for the source of each row")
     parser.add_argument(
         "--holdout-dir",
         default=None,
-        help="folder holding COMPETITION_HOLDOUT/; needed by --column-normalise",
+        help="folder holding COMPETITION_HOLDOUT/; needed by --lone-inputs and --column-normalise",
     )
     parser.add_argument("--force", action="store_true", help="overwrite --out if it exists")
     return parser.parse_args()
@@ -109,6 +121,21 @@ def standardise_rows(probabilities):
     spread = centred.std(axis=1, keepdims=True)
 
     #a perfectly flat row has no ranking; leave it flat rather than divide by 0
+    return centred / np.where(spread > 0, spread, 1.0)
+
+
+def zscore_scores(scores):
+    """Scores (not probabilities) z-scored across each row's words.
+
+    ARGS:
+        scores (np.ndarray): [N, n_words]
+
+    RETURNS:
+        [N, n_words] float64 - zero mean and unit spread per row
+    """
+    #axis=1 is the word axis: each row on its own; a flat row stays flat
+    centred = scores - scores.mean(axis=1, keepdims=True)
+    spread = centred.std(axis=1, keepdims=True)
     return centred / np.where(spread > 0, spread, 1.0)
 
 
@@ -198,35 +225,51 @@ def describe(name, probabilities, sources=None):
 
 
 def main():
-    """Read, check, average, optionally normalise, and write."""
+    """Read, check, average, mix lone words if asked, and write."""
     args = parse_args()
     from pnpl.competition import load_vocabulary, write_submission
 
     out_path = Path(args.out)
     if out_path.exists() and not args.force:
         raise SystemExit(f"{out_path} exists; pass --force to overwrite it.")
-    if len(set(args.inputs)) != len(args.inputs):
-        raise SystemExit("An input is listed twice; it would count double in the average.")
+    lone_paths = list(args.lone_inputs or [])
+    every_path = list(args.inputs) + lone_paths
+    if len(set(every_path)) != len(every_path):
+        raise SystemExit("An input is listed twice (or in both lists); it would count double in the average.")
+    if args.column_normalise:
+        print("[ensemble] WARNING: --column-normalise pools all holdout rows -- against the holdout "
+              "principle; never submit this file as a final pick")
 
     primary_words, moses_words = load_vocabulary("primary"), load_vocabulary("moses")
     loaded = [read_submission(Path(path), primary_words, moses_words) for path in args.inputs]
+    lone_loaded = [read_submission(Path(path), primary_words, moses_words) for path in lone_paths]
 
     #⚠️ every file must hold the canonical rows 0..N-1 in order
     index = loaded[0][0]
     if not np.array_equal(index, np.arange(len(index))):
         raise SystemExit(f"{args.inputs[0]}: the index column is not 0..{len(index) - 1} in order.")
-    for path, (other, _, _) in zip(args.inputs, loaded):
+    for path, (other, _, _) in zip(every_path, loaded + lone_loaded):
         if not np.array_equal(other, index):
             raise SystemExit(f"{path}: its index column differs from {args.inputs[0]}'s.")
 
-    #the source of each row, needed only to normalise columns within a source
+    #the source of each row, as the loader states it item by item
     sources = None
-    if args.column_normalise:
+    if args.column_normalise or lone_paths:
         sources = holdout_sources(args.track, args.holdout_dir, len(index))
 
     #[n_files, N, 50] -> [N, 50]: axis 0 is the file axis
     primary_scores = np.mean([standardise_rows(primary) for _, primary, _ in loaded], axis=0)
     moses_scores = np.mean([standardise_rows(moses) for _, _, moses in loaded], axis=0)
+
+    #lone words: general and specialist at equal weight, each re-standardised
+    #so neither wins by spread; sentence rows stay the general ensemble's
+    if lone_paths:
+        lone = sources == "word"
+        specialist_primary = np.mean([standardise_rows(primary) for _, primary, _ in lone_loaded], axis=0)
+        specialist_moses = np.mean([standardise_rows(moses) for _, _, moses in lone_loaded], axis=0)
+        primary_scores[lone] = 0.5 * zscore_scores(primary_scores[lone]) + 0.5 * zscore_scores(specialist_primary[lone])
+        moses_scores[lone] = 0.5 * zscore_scores(moses_scores[lone]) + 0.5 * zscore_scores(specialist_moses[lone])
+        print(f"[ensemble] {int(lone.sum())} lone-word rows mixed with {len(lone_paths)} specialist files at equal weight")
     if args.column_normalise:
         primary_scores = normalise_columns(primary_scores, sources)
         moses_scores = normalise_columns(moses_scores, sources)
@@ -247,6 +290,7 @@ def main():
     out_path.parent.mkdir(parents=True, exist_ok=True)
     write_submission(str(out_path), indices=index, primary_probs=primary, secondary_probs=moses)
     print(f"[ensemble] wrote {out_path}: {len(index)} rows from {len(args.inputs)} files"
+          + (f", lone words with {len(lone_paths)} specialist files" if lone_paths else "")
           + (", columns normalised per source" if args.column_normalise else ""))
     print("[ensemble] submission is MANUAL, through the competition web UI.")
 

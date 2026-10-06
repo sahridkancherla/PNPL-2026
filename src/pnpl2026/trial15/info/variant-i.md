@@ -1,4 +1,4 @@
-# Variant I — a word-pair model, and per-window input normalisation
+# Variant I — a word-pair model, per-window input normalisation, compliant prediction
 
 The best submission so far is **66.39**: G1 ×3 + G2 ×3 + F1 + w1024, one
 recipe family (trial 10's word decoder) trained three ways. Adding more models
@@ -85,10 +85,45 @@ and spread over its real samples (never its padding), then clamped again,
 then the 0.5 s baseline as before. No parameters, no new state-dict keys;
 earlier checkpoints load and run with "none".
 
-**The queue** — `configs/trial15/runs.txt`, 2 configs × 3 seeds, everything
-else trial 13's: I1 = G1 + normalisation, I2 = G2 + normalisation. Read I1
-against G1 and I2 against G2, seed for seed; only the leaderboard can judge a
-normalisation change.
+**The queue** — `configs/trial15/runs.txt` lines 1-6, 2 configs × 3 seeds,
+everything else trial 13's: I1 = G1 + normalisation, I2 = G2 + normalisation.
+Read I1 against G1 and I2 against G2, seed for seed; only the leaderboard can
+judge a normalisation change.
+
+## Part 3 — compliant prediction and the lone-word specialist (2026-10-07)
+
+**The holdout principle** (CLAUDE.md, adopted 2026-10-07 from the plan
+updates; all 10 final picks must comply): only things fitted on training or
+validation data and frozen, or computed from one holdout item alone. **Every
+submission before it broke the principle**: each predict script (trial 10's
+through this one) scaled the holdout with a median/IQR pooled over all of a
+holdout source's epochs. So did the gap-aware fusion's mixture (fitted on all
+holdout gaps).
+
+**Compliant scaling.** `cli.training_scaler` takes, per channel, the median
+of the training recordings' own medians and IQRs (the cache's
+`scaler_<key>.npz`) -> `data/trial15_training_scaler.npz`. `cli.predict`
+applies it by default (`--scaling training`, files named `..._ts.csv`);
+`--scaling holdout` survives only to reproduce old files, and refuses
+`--bn-adapt` otherwise. I1/I2 standardise each window themselves, so for them
+the swap changes only the first clamp; G1/G2/F1/w1024 were trained on
+per-recording scaling, so their cost has to be measured on the board.
+
+**Test-time onset shifts** (`--onset-shifts -1 0 1`): the holdout scored once
+per shift of every onset (±20 ms), each row's z-scored log-probabilities
+averaged -- one item at a time. Files gain `_tta`.
+
+**I3, the lone-word specialist** (`configs/trial15/i3_lone_specialist.yaml`,
+runs.txt lines 7-9). Lone words score 19-28 locally for every 66.39 member,
+against 47-60 overall; they are 9.6% of holdout rows, and G2's lone-word
+training gave the largest board gain of any recipe (+5.8 over G0). I3 trains
+on the new **isolated protocol** -- every training word alone with exactly
+1 s (`training_protocol: isolated`, ~780k items an epoch) -- and is selected on
+it (every validation word alone: thousands of words, not the fragment
+protocol's ~25). Per-window normalisation and EMA (0.999) on. Its CSVs enter
+`cli.ensemble --lone-inputs`: on the holdout's lone words only (each row's
+source, stated per item by the loader), general and specialist ensembles at
+**equal weight, fixed in advance**; sentence rows unchanged.
 
 ## Running it
 
@@ -115,7 +150,24 @@ CMD=$(grep "cli.fuse --csv" runs/trial15_fuse_check.md); echo "$CMD"; eval "$CMD
 # Part 2 -- six GPU runs, one array wave, each ~1.5-2.5 h on an RTX6000
 qsub -J 1-6 pbs/trial15.pbs
 uv run python -m src.pnpl2026.trial15.cli.collate      # -> runs/trial15_results.md
+
+# Part 3 -- the fixed scaler (login node, seconds), then every model compliant
+uv run python -m src.pnpl2026.trial15.cli.training_scaler
+qsub -l select=1:ncpus=8:mem=32gb:ngpus=1:gpu_type=RTX6000 -l walltime=02:00:00 -N predict-15ts -j oe -o logs/ <<'EOF'
+cd "$HOME/PNPL-2026"; source "$HOME/.local/bin/env"
+export UV_OFFLINE=1 HF_HUB_OFFLINE=1
+for run in trial13_g1_s0 trial13_g1_s1 trial13_g1_s2 trial13_g2_s0 trial13_g2_s1 trial13_g2_s2 \
+           trial10_f1_s0 trial12_w1024_s0 trial15_i1_s0 trial15_i1_s1 trial15_i1_s2 \
+           trial15_i2_s0 trial15_i2_s1 trial15_i2_s2; do
+    uv run --frozen python -m src.pnpl2026.trial15.cli.predict --ckpt runs/${run}/best.ckpt --holdout-dir data/holdout
+done
+EOF
+qsub -J 7-9 pbs/trial15.pbs                            # I3, the lone-word specialist
 ```
+
+Ensembles of compliant files use trial 15's ensembler
+(`src.pnpl2026.trial15.cli.ensemble`), whose `--lone-inputs` routes the
+specialist; trial 14's has no such option.
 
 To fuse an ensemble that includes I1/I2, run `cli.fuse_check` with its
 members' run directories (trial 15's own, `runs/trial15_i*_s*`, have dumps
@@ -159,6 +211,28 @@ same tokens.
   the real holdout files; `fuse_check --fit-protocol reference` on its dumps;
   `collate`
 
+### Part 3 (2026-10-07)
+
+- **reproducibility**: `predict --scaling holdout` writes byte-identical files
+  to the code before the change, for a per-window-normalised and a plain
+  checkpoint, on the real holdout files; `--onset-shifts 0` is byte-identical
+  to no shifts; `-1 0 1` runs three passes and writes valid rows
+- **refusals**: `--bn-adapt` with `--scaling training`; onset shifts with
+  `--window-only`
+- **scaler swap**: with a stand-in scaler ~10% off the holdout's pooled one,
+  random-weight checkpoints keep every top-10 set -- uninformative (a
+  random-init network ranks the 50 words almost regardless of input); I1/I2's
+  invariance stands on the shape check (gain and offset change nothing). The
+  G-style cost must be measured on the trained checkpoints, on the board
+- **isolated protocol** (synthetic cache): every eligible word exactly once
+  (4,323 train, 989 validation), one word, flagged isolated, 1 s; isolated
+  training with `isolated_p` or `fragment_p` set is refused
+- **lone routing**: sentence rows identical to the plain ensemble (868 rows);
+  lone rows changed (92 rows)
+- **I3 smoke** (25 s): one epoch on the synthetic cache, selection on the
+  isolated protocol, EMA weights applied at load, all four protocols scored
+  with dumps; predict with onset shifts; `collate` shows the ALONE columns
+
 ## Results
 
 ### Part 1 — the fusion lowered both leaderboard scores (2026-10-06)
@@ -201,4 +275,5 @@ transformer already uses the neighbours, so an outside chain mostly adds a
 second, mis-calibrated vote; whatever its local gains (+1 to +2 on context
 words), they do not survive the holdout.
 
-Pending: `runs/trial15_results.md` and I1/I2's 3-seed ensembles.
+Pending: `runs/trial15_results.md`, every model's compliant (`_ts`)
+predictions and their board scores, I1/I2's 3-seed ensembles, and I3.

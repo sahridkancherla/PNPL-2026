@@ -4,3 +4,6 @@ configs/trial15/i1_fragments_in.yaml 2
 configs/trial15/i2_isolated_in.yaml 0
 configs/trial15/i2_isolated_in.yaml 1
 configs/trial15/i2_isolated_in.yaml 2
+configs/trial15/i3_lone_specialist.yaml 0
+configs/trial15/i3_lone_specialist.yaml 1
+configs/trial15/i3_lone_specialist.yaml 2

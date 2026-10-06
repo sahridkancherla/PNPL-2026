@@ -21,9 +21,20 @@ to lean on, so every window must carry its own evidence.
 | Output | one of **50** words |
 | Metric | **BAcc@10** — **chance is 20%**, not 2% |
 
-⚠️ **Deep track rule: train on subject 0's data only.** Training on other
-subjects' data is **not allowed** -- no multi-subject pretraining, no pooled
-training, no downloading other subjects' recordings for deep-track models.
+**Data policy (revised 2026-10-07).** Any training data may be used, provided
+its use complies with its licence and with ethical requirements. Data from
+outside LibriBrain does not come with LibriBrain's preprocessing
+(`bads+headpos+sss+notch+bp+ds`); we must do that ourselves. LibriBrain100's
+32 broad-track subjects come preprocessed, but they recorded only Sherlock1
+ses-11/12 -- subject 0's validation and test stories.
+
+⚠️ **Holdout principle.** Allowed: anything fitted on training or validation
+data and then frozen, and anything computed from ONE holdout item alone (one
+run, or one lone word). Not used: any statistic computed across the holdout
+as a whole -- a scaler pooled over holdout epochs, holdout-wide score
+centring, BatchNorm re-estimated on holdout MEG, pseudo-labels. Every
+submission before 2026-10-07 scaled the holdout with a pooled scaler; final
+picks must not.
 
 `T = (tmax - tmin) * sfreq`. All four numbers live in `Config`; read them from
 the config rather than hard-coding 250.

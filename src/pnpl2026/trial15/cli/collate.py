@@ -35,6 +35,8 @@ COLUMNS = {
     "frag val": ("fragment", "validation", "bacc10"),
     "ref test": ("reference", "test", "bacc10"),
     "test @1": ("fragment", "test", "bacc1"),
+    "ALONE test": ("isolated", "test", "bacc10"),
+    "alone val": ("isolated", "validation", "bacc10"),
 }
 
 

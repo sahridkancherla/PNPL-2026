@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 
 from ..config import PROTOCOLS
 from .dataset import ReferenceRecordings, SequenceWindows, Shaping, collate_tokens
-from .sequences import fragment_sequences, reference_sequences, sparse_sequences
+from .sequences import fragment_sequences, isolated_sequences, reference_sequences, sparse_sequences
 
 #fragment- and sparse-protocol sequences are drawn once, from a seed of their
 #own, so every run and seed is scored on identical windows
@@ -32,7 +32,7 @@ def build_partition(cfg, table, partition, protocol, jitter_samples=0, shaping=N
         cfg (Trial15Config)
         table (TargetTable or NoTargets): for each word's t5 row
         partition (str): "train", "validation" or "test"
-        protocol (str): "reference", "fragment" or "sparse"
+        protocol (str): "reference", "fragment", "sparse" or "isolated"
         jitter_samples (int): training only
         shaping (Shaping or None): training only
 
@@ -69,6 +69,8 @@ def build_partition(cfg, table, partition, protocol, jitter_samples=0, shaping=N
             cfg.tail_seconds,
             HOLDOUT_SEED,
         )
+    elif protocol == "isolated":
+        sequences = isolated_sequences(recordings.tables, recordings.n_times, rows, cfg.samples(cfg.isolated_seconds))
     else:
         sequences = sparse_sequences(
             recordings.tables,
@@ -155,7 +157,7 @@ class Trial15DataModule(L.LightningDataModule):
 
         jitter = self.cfg.samples(self.cfg.jitter_seconds)
         shaping = training_shaping(self.cfg)
-        self.train_set = build_partition(self.cfg, self.table, "train", "reference", jitter, shaping)
+        self.train_set = build_partition(self.cfg, self.table, "train", self.cfg.training_protocol, jitter, shaping)
         self.val_set = build_partition(self.cfg, self.table, "validation", self.cfg.selection_protocol)
         print(describe("train", self.train_set))
         if shaping is not None:

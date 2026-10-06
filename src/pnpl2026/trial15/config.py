@@ -26,7 +26,11 @@ from ..config import REPO_ROOT, Config, _coerce
 TOKEN_SETS = ("all", "invocab")
 
 #how sequences are cut for scoring; see data/sequences.py
-PROTOCOLS = ("reference", "fragment", "sparse")
+PROTOCOLS = ("reference", "fragment", "sparse", "isolated")
+
+#what the training set is cut by: whole sentences (shaped or not), or every
+#word alone for the lone-word specialist
+TRAINING_PROTOCOLS = ("reference", "isolated")
 
 #the fields that define a protocol, reset to the defaults below at evaluation
 PROTOCOL_FIELDS = (
@@ -69,6 +73,9 @@ class Trial15Config(Config):
             training: the holdout's histogram plus one
         selection_protocol (str): the validation set's protocol, which picks
             best.ckpt and stops the run
+        training_protocol (str): "reference", whole sentences as trial 13
+            trained (with any shaping), or "isolated", every training word
+            alone with 1 s -- the lone-word specialist; no shaping then
         jitter_seconds (float): one-sided onset jitter, training only
         warmup_fraction (float): fraction of steps spent warming up
         min_lr (float): floor of the cosine decay
@@ -108,6 +115,7 @@ class Trial15Config(Config):
     isolated_p: float = 0.0
     fragment_lengths: list = field(default_factory=lambda: [3, 1, 3, 25, 56, 38, 24, 12, 3])
     selection_protocol: str = "fragment"
+    training_protocol: str = "reference"
 
     # --- training ---
     jitter_seconds: float = 0.0
@@ -134,6 +142,12 @@ class Trial15Config(Config):
             raise ValueError(f"token_set must be one of {TOKEN_SETS}, got {self.token_set!r}")
         if self.selection_protocol not in PROTOCOLS:
             raise ValueError(f"selection_protocol must be one of {PROTOCOLS}, got {self.selection_protocol!r}")
+        if self.training_protocol not in TRAINING_PROTOCOLS:
+            raise ValueError(f"training_protocol must be one of {TRAINING_PROTOCOLS}, got {self.training_protocol!r}")
+
+        #shaping cuts whole sentences; an all-isolated training set has none
+        if self.training_protocol == "isolated" and (self.fragment_p > 0 or self.isolated_p > 0):
+            raise ValueError("training_protocol isolated serves every word alone already; set fragment_p and isolated_p to 0.")
 
         #the baseline slice must sit inside the shortest window ever served,
         #or an isolated word would have no baseline
