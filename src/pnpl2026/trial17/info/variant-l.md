@@ -90,5 +90,24 @@ EOF
 
 ## Results
 
-Pending: the 3-seed wave, `runs/trial17_results.md`, and the compliant
-ensemble against G2.
+### Local (2026-10-08), seed means
+
+| run | frag val | FRAG test | ref test | lone words (isolated test) | train |
+|---|---|---|---|---|---|
+| trial 13 G2 | 38.44 | 31.80 | 69.32 | 27.5 / 28.9 / 31.3 (per seed) | -- |
+| trial 13 G1 | 50.04 | 49.22 | 73.27 | 29.6 (s0) | -- |
+| **L** | **53.37** ±1.4 | **46.85** ±3.8 | **72.22** ±2.2 | **35.07** ±0.2 | 71.31 |
+| K0n (trial 16) | 33.35 | 31.76 | 66.39 | 31.59 | 65.79 |
+| Kn (trial 16) | 34.73 | 30.44 | 68.77 | 33.32 | 68.36 |
+| I3 (trial 15, lone-word specialist) | -- | -- | -- | **41.62** ±0.7 | 46.21 |
+
+- L leads G2 locally everywhere: +15 on the fragment protocol, +3 on the
+  full-context test, +6 on lone words. ⚠️ G1 looked the same locally
+  (fragment 49, full context 73) and only tied G2 on the board; the fragment
+  protocol is close to what L and G1 train on, so it flatters both. The
+  board decides.
+- Lone words, scored only on the private board and measured here in their
+  exact format on thousands of words: I3 41.6 > L 35.1 > Kn 33.3 > K0n 31.6
+  > G1/G2 ~29 > F1/w1024 ~23.
+
+Pending: the compliant ensemble against G2 on the board.

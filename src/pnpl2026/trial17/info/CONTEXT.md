@@ -12,6 +12,7 @@ last onset. A copy of trial 16's code (2026-10-07) minus its layer check.
 | the new settings | `../config.py` (`run_p`, `run_max_skipped`) |
 | compliant prediction, onset shifts, lone-word ensembling | `../cli/predict.py`, `../cli/training_scaler.py`, `../cli/ensemble.py` |
 | hub correction (querybank normalisation, no training) | `hub-correction.md`, `../hubnorm.py`, `../cli/hubnorm.py` |
+| which recipe fills the lone-word rows (private board only; local comparison) | `../cli/lone_check.py` |
 | configs and the queue | `configs/trial17/`, `pbs/trial17.pbs` |
 
 Everything else (network, cache, protocols) is trial 16's, unchanged; see

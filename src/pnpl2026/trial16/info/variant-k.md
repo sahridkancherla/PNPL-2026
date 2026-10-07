@@ -116,6 +116,14 @@ now names `data/word_embeddings_t5_layer3.npz`. Every table's simulated
 top-10 share runs from 0% to 92-100% for its most central word (a fair share
 is 20%), so hubs are strong in all of them.
 
-Pending: the K0n/Kn wave,
+**Local, K0n/Kn (2026-10-08), seed means:** K0n frag val 33.35, FRAG test
+31.76, ref test 66.39, lone words 31.59, train 65.79; Kn frag val 34.73, FRAG
+test 30.44, ref test 68.77, lone words 33.32, train 68.36. Against trial 13's
+G2 (frag val 38.44, FRAG test 31.80, ref test 69.32, lone words ~29): lower on
+validation and full context, higher on lone words; Kn above K0n on most
+columns. Seeds spread widely (K0n FRAG test 24-40). Local columns have not
+ranked recipes like the board before; the board decides.
+
+Pending: the K0n/Kn wave on the board,
 `runs/trial16_results.md`, and the compliant 3-seed ensembles on the
 leaderboard.
