@@ -109,6 +109,13 @@ What the comparisons now read: **K0n against compliant G2** (63.41) -- the
 three remaining changes together -- and **Kn against K0n**, the second head.
 The thresholds above stand (2 points).
 
-Pending: the embed job and hub check, the K0n/Kn wave,
+**Hub check (2026-10-07): layer 3.** Against the reference (state 12):
+layer 3 Spearman +0.27 with 3 of the top 10 central words shared; layer 6
++0.53 with 5; layer 18 +0.57 with 7. By the rule fixed in advance, `k.yaml`
+now names `data/word_embeddings_t5_layer3.npz`. Every table's simulated
+top-10 share runs from 0% to 92-100% for its most central word (a fair share
+is 20%), so hubs are strong in all of them.
+
+Pending: the K0n/Kn wave,
 `runs/trial16_results.md`, and the compliant 3-seed ensembles on the
 leaderboard.

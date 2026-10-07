@@ -13,7 +13,7 @@ baseline_seconds: 0.0
 jitter_seconds: 0.04
 ema_decay: 0.999
 
-second_embeddings: data/word_embeddings_t5_layer6.npz
+second_embeddings: data/word_embeddings_t5_layer3.npz
 second_loss_weight: 1.0
 
 model_kwargs:
