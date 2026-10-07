@@ -92,4 +92,27 @@ scored on test.
 - Choosing among three fits on the test words makes each chosen gain read a
   little high.
 
-Pending: the on/off pair on the board.
+### Which recipe fills the lone rows (`cli.lone_check`, 2026-10-08)
+
+On the isolated protocol -- every word alone with 1 s, the holdout's lone
+format -- 3,052 validation and 2,681 test words, 30 recipes (four groups,
+each alone and in every equal-weight mix, with and without the hub
+correction). Chosen on validation; test is the unbiased number:
+
+| lone-row recipe | val | test |
+|---|---|---|
+| **I3 (3 seeds), hub-corrected** -- chosen | 42.59 | 44.94 |
+| I3, uncorrected | 40.66 | 45.54 |
+| I3 + L, hub-corrected | 40.79 | 42.81 |
+| mix + I3 at equal weight (what `--lone-inputs` wrote) | 35.20 | 39.62 |
+| the 66.39 mix (6 of its 8 members), hub-corrected | 29.65 | 32.33 |
+| the 66.39 mix, as submitted | 26.16 | 27.17 |
+
+The specialist alone beats every mix that adds weaker models; the hub
+correction is a tie on I3 (better on validation, slightly worse on test) and
+a large gain on the mix. `cli.lone_fill` writes the chosen recipe into any
+submission's lone rows, sentence rows untouched -- so its public score always
+equals its parent's, while the private score should gain on lone words
+(27 -> ~45 locally).
+
+Pending: the run-word on/off pair on the board.
