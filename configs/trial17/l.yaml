@@ -1,0 +1,10 @@
+# L -- G2 plus holdout runs. Half of each epoch's training sentences are
+# served as the holdout serves its runs: scored words only as tokens,
+# neighbours directly adjacent or with one unscored word between (a third of
+# the holdout's pairs), at most 0.8 s apart, lengths drawn from the holdout's
+# histogram, the MEG cut 1.13-1.68 s after the last onset. G2's tenth of lone
+# words stays; the remaining 40% are whole sentences. Compare with compliant
+# G2 (63.41), seed for seed.
+run_name: trial17_l
+
+run_p: 0.5

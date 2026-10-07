@@ -275,5 +275,38 @@ transformer already uses the neighbours, so an outside chain mostly adds a
 second, mis-calibrated vote; whatever its local gains (+1 to +2 on context
 words), they do not survive the holdout.
 
-Pending: `runs/trial15_results.md`, every model's compliant (`_ts`)
-predictions and their board scores, I1/I2's 3-seed ensembles, and I3.
+### Parts 2 and 3 — the first compliant day (2026-10-07)
+
+Every file predicted with the fixed training scaler (`_ts`); 3-seed
+ensembles unless named otherwise.
+
+| submission | board | against |
+|---|---|---|
+| G2 ensemble | 63.408 | 63.408 holdout-scaled |
+| G1 ensemble | 62.837 | 62.837 holdout-scaled |
+| G1 + G2 + F1 + w1024 | 64.387 | 66.387 holdout-scaled |
+| **I2** (G2 + per-window normalisation) | **56.168** | G2: −7.2 |
+| **I1** (G1 + per-window normalisation) | **56.866** | G1: −6.0 |
+| I1 + I2 + F1 + w1024 | 60.171 | 64.387: −4.2 |
+| G1 + G2 + I1 + I2 + F1 + w1024 | 58.904 | 64.387: −5.5 |
+| G1 + G2 + F1 + w1024, I3 on lone rows | 64.387 | identical to the line above it |
+| G1 + G2 + F1 + w1024, onset shifts −1 0 1 | 64.637 | +0.25 |
+
+- **Compliance cost nothing.** G1 and G2 scored identically under the
+  fixed scaler: the holdout was never mis-scaled, so the scaling-shift
+  explanation for the local/board gap is refuted. The mix's −2.000 is one
+  row: a class with a single public row flipping moves BAcc by exactly
+  100/50 = 2.000.
+- **Per-window normalisation is a clear negative result**, −6 to −7 on both
+  recipes and dragging every mix it joined. Standardising each channel by its
+  own window throws away the channels' relative amplitudes (the
+  topography), which single-trial word decoding needs; MEGConformer's gain
+  was on 100-trial averages. Do not reuse it.
+- **The public board holds no lone-word rows -- confirmed.** Routing I3 into
+  all 92 lone rows changed nothing to three decimals; then a probe, the
+  64.387 file with only the lone rows' rankings REVERSED (every lone row's
+  bottom words as its top 10), scored 64.387 again. Lone words count only in
+  the private ranking, so they can only be judged locally -- on the isolated
+  protocol, which copies their format exactly. Every board result so far
+  (G2's +5.8 included) came from runs alone.
+- Onset shifts: +0.25, a single row. Kept as cheap, never decisive.

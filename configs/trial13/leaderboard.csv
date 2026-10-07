@@ -42,3 +42,13 @@ ens_best_d16f3,in_context,64.173,2026-10-06,ens_best_d16f3_in_context.csv
 trial13_g2_ens,in_context_wp,62.584,2026-10-06,trial13_g2_ens_in_context_wp.csv
 ens_g1g2_f1w1024,in_context_wp,64.088,2026-10-06,ens_g1g2_f1w1024_in_context_wp.csv
 ens_g1g2_f1w1024,in_context_wpgap,62.755,2026-10-06,ens_g1g2_f1w1024_in_context_wpgap.csv
+ens_g1g2_f1w1024,in_context_ts,64.387,2026-10-07,ens_g1g2_f1w1024_ts.csv
+trial13_g2_ens,in_context_ts,63.408,2026-10-07,trial13_g2_ens_ts.csv
+trial15_i2_ens,in_context_ts,56.168,2026-10-07,trial15_i2_ens_ts.csv
+trial13_g1_ens,in_context_ts,62.837,2026-10-07,trial13_g1_ens_ts.csv
+trial15_i1_ens,in_context_ts,56.866,2026-10-07,trial15_i1_ens_ts.csv
+ens_i1i2_f1w1024,in_context_ts,60.171,2026-10-07,ens_i1i2_f1w1024_ts.csv
+ens_g1g2i1i2_f1w1024,in_context_ts,58.904,2026-10-07,ens_g1g2i1i2_f1w1024_ts.csv
+ens_g1g2_f1w1024,in_context_ts_lone,64.387,2026-10-07,ens_g1g2_f1w1024_ts_lone.csv
+ens_g1g2_f1w1024,in_context_ts_tta,64.637,2026-10-07,ens_g1g2_f1w1024_ts_tta.csv
+probe_lone_reversed,in_context_ts_probe,64.387,2026-10-07,probe_lone_reversed.csv

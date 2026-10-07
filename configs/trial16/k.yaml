@@ -5,7 +5,9 @@
 # ⚠️ The second table must exist on RDS before this runs: pbs/trial16_embed.pbs
 # builds it, and `cli.hub_check` picks the layer. If the check picks a layer
 # other than 6, change the path below. See info/variant-k.md.
-run_name: trial16_k
+# Per-window normalisation dropped 2026-10-07 (see k0.yaml); "n" in the run
+# name keeps --resume off the earlier, normalised checkpoints.
+run_name: trial16_kn
 
 baseline_seconds: 0.0
 jitter_seconds: 0.04
@@ -15,4 +17,4 @@ second_embeddings: data/word_embeddings_t5_layer6.npz
 second_loss_weight: 1.0
 
 model_kwargs:
-  input_norm: instance
+  input_norm: none

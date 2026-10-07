@@ -1,18 +1,19 @@
-# K0 -- Variant K without the second head: trial 13's G2 plus four changes.
+# K0 -- Variant K without the second head: trial 13's G2 plus three changes.
 #
-#   per-window normalisation   each channel of each window by its own mean
-#                              and spread (trial 15's `input_norm: instance`)
 #   no baseline                the 0.5 s post-onset baseline removed
 #   onset jitter               +/-2 samples (+/-40 ms), training only
 #   weight EMA                 0.999
 #
-# K0 against trial 15's I2 (G2 + normalisation) reads the last three together;
-# K against K0 reads the second head alone. See info/variant-k.md.
-run_name: trial16_k0
+# Per-window normalisation was dropped on 2026-10-07 under this trial's own
+# rule (I2 lost 7.2 to compliant G2); the run name gained "n" so the job's
+# --resume can never pick up the earlier, normalised checkpoints.
+# K0n against compliant G2 reads the three changes; K against K0 the second
+# head. See info/variant-k.md.
+run_name: trial16_k0n
 
 baseline_seconds: 0.0
 jitter_seconds: 0.04
 ema_decay: 0.999
 
 model_kwargs:
-  input_norm: instance
+  input_norm: none

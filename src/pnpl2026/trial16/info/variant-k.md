@@ -55,7 +55,7 @@ qsub -J 1-6 pbs/trial16.pbs                         # K x3, K0 x3
 uv run python -m pnpl2026.trial16.cli.collate       # -> runs/trial16_results.md
 
 # compliant predictions with onset shifts, then each 3-seed ensemble
-for run in trial16_k trial16_k0; do for seed in 0 1 2; do
+for run in trial16_kn trial16_k0n; do for seed in 0 1 2; do
     uv run --frozen python -m pnpl2026.trial16.cli.predict \
         --ckpt runs/${run}_s${seed}/best.ckpt --holdout-dir data/holdout --onset-shifts -1 0 1
 done; done
@@ -95,5 +95,20 @@ sensor type), or to `input_norm: none` with the training scaler.
 
 ## Results
 
-Pending: the embed job and hub check, the K/K0 wave, `runs/trial16_results.md`,
-and the compliant 3-seed ensembles on the leaderboard.
+### 2026-10-07 — the rule's last clause fired; relaunched without per-window normalisation
+
+Trial 15's I2 (G2 + per-window normalisation) scored **56.17** compliant,
+against compliant G2's **63.41**: 7.2 below, past this file's 2-point line
+(I1 lost 6.0 to G1 the same way). So K and K0 were stopped and relaunched with
+`input_norm: none`; no-baseline, jitter, EMA and the second head unchanged.
+The run names gained an "n" (`trial16_k0n`, `trial16_kn`) so the job's
+`--resume` cannot continue the earlier normalised checkpoints, which have the
+same parameters and would load without complaint.
+
+What the comparisons now read: **K0n against compliant G2** (63.41) -- the
+three remaining changes together -- and **Kn against K0n**, the second head.
+The thresholds above stand (2 points).
+
+Pending: the embed job and hub check, the K0n/Kn wave,
+`runs/trial16_results.md`, and the compliant 3-seed ensembles on the
+leaderboard.

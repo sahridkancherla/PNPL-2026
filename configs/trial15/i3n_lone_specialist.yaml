@@ -1,0 +1,19 @@
+# I3n -- the lone-word specialist (I3) without per-window normalisation.
+# Per-window normalisation cost 6-7 points on the public runs (I1, I2,
+# 2026-10-07); its effect on lone words is unknown, and lone words are scored
+# only in the private ranking (the public board holds none). So both versions
+# are compared locally on the isolated protocol before either is routed into a
+# final pick. Otherwise I3's settings exactly.
+run_name: trial15_i3n
+
+training_protocol: isolated
+selection_protocol: isolated
+
+batch_size: 512
+max_epochs: 40
+patience: 8
+
+ema_decay: 0.999
+
+model_kwargs:
+  input_norm: none

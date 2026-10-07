@@ -1,0 +1,3 @@
+configs/trial17/l.yaml 0
+configs/trial17/l.yaml 1
+configs/trial17/l.yaml 2
