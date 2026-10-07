@@ -71,5 +71,25 @@ sequences, but its validation bank is small (~240 words).
 
 ## Results
 
-Pending: `runs/trial17_hubnorm.md` on the real dumps, and the on/off pair on
-the board.
+### Local check on the real dumps (2026-10-07)
+
+The compliant 66.39 mix's 8 members, chunked dumps; fitted on validation,
+scored on test.
+
+| words | none | zscore | balance | balance_half | top-10 shares, none -> chosen |
+|---|---|---|---|---|---|
+| run words (2,421) | 60.96 | 62.14 (+1.18) | 61.28 (+0.32) | **62.57 (+1.61)** | 8-41% -> 12-30% |
+| lone words (260) | 23.81 | **32.10 (+8.29)** | 30.40 (+6.58) | 24.98 (+1.16) | 0-98% -> 13-26% |
+
+- **Lone words are where the hubs are**: one word reaches the top 10 of 98%
+  of lone test words (the old "really"/"so" collapse, still there), and the
+  frozen zscore takes the mix from 23.8 to 32.1 -- about +8, against roughly
+  ±3-4 points of noise on 260 words. Lone words are scored only on the
+  PRIVATE board, so this gain can never show publicly; it is the strongest
+  local evidence we have for anything on the private part.
+- Run words: +1.6 (balance at half strength), modest. The board's on/off pair
+  (`ens_g1g2_f1w1024_ts_hub.csv` against 64.387) judges this part alone.
+- Choosing among three fits on the test words makes each chosen gain read a
+  little high.
+
+Pending: the on/off pair on the board.
