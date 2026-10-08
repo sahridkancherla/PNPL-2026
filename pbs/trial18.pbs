@@ -1,6 +1,6 @@
 #!/bin/bash
 #PBS -l select=1:ncpus=8:mem=64gb:ngpus=1:gpu_type=RTX6000
-#PBS -l walltime=02:00:00
+#PBS -l walltime=04:00:00
 #PBS -N pnpl-trial18
 #PBS -j oe
 #PBS -o logs/
@@ -9,14 +9,13 @@
 # (G2's first). Three seeds, one per line of configs/trial18/runs.txt, each
 # refining the base of the same seed. From the repo root:
 #
-#     qsub -J 1-3 pbs/trial18.pbs      M on G2, one array wave
+#     qsub -J 1-3 pbs/trial18.pbs      M on G2 (dropped: see info/variant-m.md)
+#     qsub -J 4-12 pbs/trial18.pbs     N, K2 and P, one array wave
 #     qsub -v RUN=<n> pbs/trial18.pbs  one line again: a rerun, or a resume
 #
-# Walltime: only the refiner trains (~0.55M parameters); the frozen base runs
-# forward only, so an epoch should take well under G2's ~2.1 min on an
-# RTX6000. Ten epochs at most, then the strength sweep on validation and
-# ~10-20 min of end-of-run scoring (four protocols x two partitions, with and
-# without BatchNorm re-estimation, plus dumps): 2 h leaves room.
+# Walltime 4 h: N, K2 and P (lines 4-12) are full G2-sized trainings, which
+# fitted in 4 h (~2.1 min per epoch on an RTX6000, plus ~10-20 min of
+# end-of-run scoring). M's refinement runs (lines 1-3) finish far sooner.
 # --resume continues a killed run from last.ckpt.
 #
 # ⚠️ RTX6000 trains in fp16 ("16-mixed" in configs/trial18/hpc.yaml): Turing
@@ -88,6 +87,10 @@ if cfg.has_refiner:
 # Variant K's second table, from pbs/trial16_embed.pbs
 if cfg.has_second_head:
     needed.append(cfg.resolved_second_embeddings())
+
+# all-data: the other subjects' cache, from pbs/trial18_build_others.pbs
+if cfg.others_cache_dir:
+    needed.append(cfg.resolved_others_cache_dir() / "manifest.json")
 missing = [str(path) for path in needed if not path.exists()]
 if missing:
     sys.exit(f"[preflight] not on RDS: {missing}. Run trial10_build / trial10_embed (and trial16_embed for K) first.")
@@ -113,7 +116,7 @@ print(
     f"torch {torch.__version__} | CUDA {torch.version.cuda}",
     file=sys.stderr,
 )
-print(cache, cfg.run_name)
+print(cache, cfg.run_name, cfg.resolved_others_cache_dir() or "-")
 PYTHON
 }
 
@@ -123,7 +126,7 @@ PYTHON
     # Captured first: an assignment carries the preflight's exit status, so a
     # failed check stops the job here. `read <<<` alone would swallow it
     PREFLIGHT=$(preflight)
-    read -r CACHE_DIR BASE_NAME <<< "$PREFLIGHT"
+    read -r CACHE_DIR BASE_NAME OTHERS_DIR <<< "$PREFLIGHT"
 
     # Copy the cache to the node's local disk. Every word's window is a
     # random-access slice; from RDS that is small reads over the network.
@@ -141,6 +144,16 @@ PYTHON
     STAGE_CONFIG="$TMPDIR/staged_run.yaml"
     printf 'cache_dir: "%s"\nseed: %s\nrun_name: "%s_s%s"\n' \
         "$STAGED_CACHE" "$SEED" "$BASE_NAME" "$SEED" > "$STAGE_CONFIG"
+
+    # All-data runs read the other subjects' cache as randomly: stage it too
+    if [ "$OTHERS_DIR" != "-" ]; then
+        STAGED_OTHERS="$TMPDIR/$(basename "$OTHERS_DIR")"
+        echo "[stage] $OTHERS_DIR ($(du -sh "$OTHERS_DIR" | cut -f1)) -> $STAGED_OTHERS"
+        SECONDS=0
+        cp -r "$OTHERS_DIR" "$STAGED_OTHERS"
+        echo "[stage] copied in ${SECONDS}s"
+        printf 'others_cache_dir: "%s"\n' "$STAGED_OTHERS" >> "$STAGE_CONFIG"
+    fi
 
     # --resume continues from last.ckpt, so a walltime kill just means
     # resubmitting the same line rather than starting over.

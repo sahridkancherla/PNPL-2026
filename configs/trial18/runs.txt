@@ -1,3 +1,15 @@
 configs/trial18/m_g2.yaml 0
 configs/trial18/m_g2.yaml 1
 configs/trial18/m_g2.yaml 2
+configs/trial18/n_no_context.yaml 0
+configs/trial18/n_no_context.yaml 1
+configs/trial18/n_no_context.yaml 2
+configs/trial18/k2_layer3.yaml 0
+configs/trial18/k2_layer3.yaml 1
+configs/trial18/k2_layer3.yaml 2
+configs/trial18/p_phonology.yaml 0
+configs/trial18/p_phonology.yaml 1
+configs/trial18/p_phonology.yaml 2
+configs/trial18/all_g2.yaml 0
+configs/trial18/all_g2.yaml 1
+configs/trial18/all_g2.yaml 2

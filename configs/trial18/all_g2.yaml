@@ -1,0 +1,11 @@
+# ALL -- G2 trained on everything: all of subject 0 (pnpl's train, validation
+# and test recordings) and the 32 broad-track subjects, who heard Sherlock1
+# sessions 11 and 12 (cli/build_others.py -> data/trial18_others). Local
+# validation is then not clean, so the run trains G2's own mean best epoch
+# count, read off its three runs, and keeps the last epoch. Judged on the
+# board only: alone against G2 (63.41), and in the best mix in G2's place.
+run_name: trial18_all_g2
+
+train_partitions: [train, validation, test]
+others_cache_dir: data/trial18_others
+epochs_from: runs/trial13_g2_s*/evaluation.json

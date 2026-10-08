@@ -1,0 +1,7 @@
+# K2 -- G2 plus Kn's second head: the same t5 layer-3 table, but none of
+# K0n's other changes (baseline on, no jitter, no EMA). Kn scored 56.0 alone
+# yet added +1.7 to the mix; K2 says whether the second target space alone
+# does that. Judged in the best mix (67.00), in Kn's place and beside it.
+run_name: trial18_k2
+
+second_embeddings: data/word_embeddings_t5_layer3.npz

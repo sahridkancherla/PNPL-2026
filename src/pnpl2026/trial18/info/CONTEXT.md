@@ -6,7 +6,10 @@ checkpoint, G2's first. A copy of trial 17's code (2026-10-08); with
 
 | want | go to |
 |---|---|
-| why, the design, the departures from the paper, the decision rule, how to run, what was checked | `variant-m.md` |
+| why, the design, the departures from the paper, the decision rule, how to run, what was checked | `variant-m.md` (dropped: no local gain) |
+| the research note's suggestions, tested: N (no transformer), K2 and P (second target spaces) | `variants-n-k2-p.md` |
+| P's phonological target table | `../cli/build_phoneme_embeddings.py` |
+| training on all the data: subject 0's every partition, the 32 other subjects | `all-data.md`, `../cli/build_others.py`, `pbs/trial18_build_others.pbs` |
 | the refiner: pyramid pooling, query, bounded residual | `../models/refine.py` |
 | where it sits in the network; the conv-layer taps | `../models/net.py`, `../models/encoder.py` (`features`) |
 | the extra losses, freezing the base, calibration, the strength curve | `../lit.py` |

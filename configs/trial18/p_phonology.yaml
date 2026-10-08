@@ -1,0 +1,7 @@
+# P -- G2 plus a second head on each word's SOUND SHAPE: phoneme n-grams from
+# the event tables' alignments (cli/build_phoneme_embeddings.py), the
+# research note's acoustic target without audio. A target space whose
+# mistakes are not t5's. Judged in the best mix (67.00), as K2.
+run_name: trial18_p
+
+second_embeddings: data/word_embeddings_phon.npz

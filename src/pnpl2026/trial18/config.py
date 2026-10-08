@@ -12,6 +12,12 @@ refiner on that checkpoint, frozen. Such a run takes every other setting from
 the BASE (`refinement_config`): only `REFINE_RUN_FIELDS` come from its own
 files, so the base's architecture, data and shaping can never drift.
 
+All-data training, off by default: `train_partitions` adds subject 0's
+validation and test recordings to training, `others_cache_dir` adds the 32
+broad-track subjects (`cli/build_others.py`). Either one makes local
+validation unclean, so such a run trains a fixed number of epochs
+(`epochs_from` reads them off earlier runs) and keeps the last one.
+
 `input_norm` is an encoder argument and lives in `model_kwargs`. The dataclass
 is a superset of trial 10's, 13's and 15's configs, so their checkpoints'
 saved hyperparameters load here unchanged and run with one head.
@@ -121,6 +127,14 @@ class Trial18Config(Config):
         refine_calibration_batches (int): training batches the
             standardisation statistics come from
         refine_centre_momentum (float): the residual centre's update rate
+        train_partitions (list): subject 0's pnpl partitions trained on;
+            ["train", "validation", "test"] is all of subject 0
+        others_cache_dir (str): the other subjects' cache, repo-relative; ""
+            trains on subject 0 alone
+        n_subjects (int): subject layers; written by cli.train from the
+            others' cache, so a checkpoint rebuilds without it
+        epochs_from (str): a glob of earlier runs' evaluation.json files; with
+            unclean selection, max_epochs becomes their mean best epoch count
         torch_threads (int): 0 leaves torch's default
         duty_cycle (float): laptop thermal pacing; 1.0 is off
         cooldown_every_minutes (float): 0 disables the periodic pause
@@ -182,6 +196,12 @@ class Trial18Config(Config):
     refine_strengths: list = field(default_factory=lambda: [0.0, 0.125, 0.25, 0.5, 1.0])
     refine_calibration_batches: int = 64
     refine_centre_momentum: float = 0.01
+
+    # --- all-data training: subject 0's every partition, the other subjects ---
+    train_partitions: list = field(default_factory=lambda: ["train"])
+    others_cache_dir: str = ""
+    n_subjects: int = 1
+    epochs_from: str = ""
 
     # --- machine ---
     accelerator: str = "auto"
@@ -249,6 +269,13 @@ class Trial18Config(Config):
         if self.precision not in ("32", "bf16-mixed", "16-mixed"):
             raise ValueError(f"precision must be '32', 'bf16-mixed' or '16-mixed', got {self.precision!r}")
 
+        #all-data: subject 0's own partitions, train always among them
+        known = {"train", "validation", "test"}
+        if "train" not in self.train_partitions or not set(self.train_partitions) <= known:
+            raise ValueError(f"train_partitions must include 'train' and name only {sorted(known)}, got {self.train_partitions}")
+        if self.n_subjects < 1:
+            raise ValueError(f"n_subjects must be >= 1, got {self.n_subjects}")
+
         #Variant M: one head only, and a pooled span every item has whole
         if self.refine_base:
             if self.has_second_head:
@@ -300,6 +327,16 @@ class Trial18Config(Config):
     def resolved_second_embeddings(self):
         """Absolute path to the second target table; None with one head."""
         return REPO_ROOT / self.second_embeddings if self.second_embeddings else None
+
+    @property
+    def clean_selection(self):
+        """Whether validation is untouched by training: no subject-0 validation
+        recordings in it, and no other subject (they heard those same stories)."""
+        return "validation" not in self.train_partitions and not self.others_cache_dir
+
+    def resolved_others_cache_dir(self):
+        """Absolute path to the other subjects' cache; None without one."""
+        return REPO_ROOT / self.others_cache_dir if self.others_cache_dir else None
 
     @property
     def has_refiner(self):

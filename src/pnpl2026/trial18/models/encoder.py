@@ -324,6 +324,7 @@ class WordEncoder(nn.Module):
         glu_context=1,
         input_norm="none",
         input_norm_eps=1e-5,
+        n_subjects=1,
     ):
         """
         ARGS:
@@ -352,6 +353,7 @@ class WordEncoder(nn.Module):
             input_norm (str): "none" (trials 10-13), or "instance": each
                 window standardised per channel by its own statistics
             input_norm_eps (float): variance floor for "instance"
+            n_subjects (int): subject layers; above 1 only for all-data training
         """
         super().__init__()
         if spatial not in SPATIAL_KINDS:
@@ -389,7 +391,7 @@ class WordEncoder(nn.Module):
             self.initial_linear = nn.Conv1d(width, initial_linear, 1)
             width = initial_linear
 
-        self.subject = SubjectLayer(width) if subject_layer else nn.Identity()
+        self.subject = SubjectLayer(width, n_subjects) if subject_layer else nn.Identity()
 
         #[width] then `depth` layers of `hidden`: the first layer has no skip
         self.convs = ConvSequence(
@@ -448,24 +450,26 @@ class WordEncoder(nn.Module):
         standardised = (x - mean) / torch.sqrt(variance + self.input_norm_eps)
         return standardised.clamp(-self.clamp, self.clamp) * mask
 
-    def forward(self, windows, lengths):
+    def forward(self, windows, lengths, subject=None):
         """
         ARGS:
             windows (torch.Tensor): [N, n_channels, n_times], zero-padded
             lengths (torch.Tensor): [N] real samples per window
+            subject (torch.Tensor or None): [N] subject layers; None is subject 0
 
         RETURNS:
             [N, d_model] - one vector per word
         """
-        return self.features(windows, lengths)[0]
+        return self.features(windows, lengths, subject=subject)[0]
 
-    def features(self, windows, lengths, tap_layers=()):
+    def features(self, windows, lengths, tap_layers=(), subject=None):
         """One vector per word, and chosen conv layers' outputs (Variant M).
 
         ARGS:
             windows (torch.Tensor): [N, n_channels, n_times], zero-padded
             lengths (torch.Tensor): [N] real samples per window
             tap_layers (tuple): ConvSequence layers whose outputs are kept
+            subject (torch.Tensor or None): [N] subject layers; None is subject 0
 
         RETURNS:
             vector : [N, d_model] - one vector per word
@@ -492,7 +496,8 @@ class WordEncoder(nn.Module):
 
         #sensors -> virtual channels -> subject space, padding kept at zero
         x = self.spatial(x)
-        x = self.subject(self.initial_linear(x)) * mask
+        x = self.initial_linear(x)
+        x = (self.subject(x, subject) if isinstance(self.subject, SubjectLayer) else self.subject(x)) * mask
         x, tapped = self.convs.forward_with_taps(x, mask, tap_layers)
 
         #[N, d_model, T] -> [N, T, d_model] for the pool

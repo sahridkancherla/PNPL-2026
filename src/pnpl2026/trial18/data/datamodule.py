@@ -23,7 +23,7 @@ from .sequences import fragment_sequences, holdout_chains, isolated_sequences, r
 HOLDOUT_SEED = 20260930
 
 
-def build_partition(cfg, table, partition, protocol, jitter_samples=0, shaping=None):
+def build_partition(cfg, table, partition, protocol, jitter_samples=0, shaping=None, others_dir=None):
     """One partition's dataset under one protocol.
 
     Shared by training and `cli.evaluate`, so both cut sequences identically.
@@ -31,17 +31,19 @@ def build_partition(cfg, table, partition, protocol, jitter_samples=0, shaping=N
     ARGS:
         cfg (Trial18Config)
         table (TargetTable or NoTargets): for each word's t5 row
-        partition (str): "train", "validation" or "test"
+        partition (str or list): "train", "validation" or "test"; a list
+            takes several (all-data training)
         protocol (str): "reference", "fragment", "sparse" or "isolated"
         jitter_samples (int): training only
         shaping (Shaping or None): training only
+        others_dir (Path or None): the other subjects' cache, training only
 
     RETURNS:
         SequenceWindows
     """
     if protocol not in PROTOCOLS:
         raise ValueError(f"Unknown protocol {protocol!r}; known: {PROTOCOLS}")
-    recordings = ReferenceRecordings(cfg.resolved_cache_dir(), partition)
+    recordings = ReferenceRecordings(cfg.resolved_cache_dir(), partition, others_dir)
 
     #⚠️ the cache must be at the rate the config describes, or every window
     #and every baseline is silently the wrong length
@@ -167,7 +169,16 @@ class Trial18DataModule(L.LightningDataModule):
 
         jitter = self.cfg.samples(self.cfg.jitter_seconds)
         shaping = training_shaping(self.cfg)
-        self.train_set = build_partition(self.cfg, self.table, "train", self.cfg.training_protocol, jitter, shaping)
+        #all-data: subject 0's chosen partitions, and the others' cache if named
+        self.train_set = build_partition(
+            self.cfg,
+            self.table,
+            list(self.cfg.train_partitions),
+            self.cfg.training_protocol,
+            jitter,
+            shaping,
+            self.cfg.resolved_others_cache_dir(),
+        )
         self.val_set = build_partition(self.cfg, self.table, "validation", self.cfg.selection_protocol)
         print(describe("train", self.train_set))
         if shaping is not None:

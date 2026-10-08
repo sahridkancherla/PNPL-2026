@@ -182,28 +182,54 @@ class FixedPCA(nn.Module):
 
 
 class SubjectLayer(nn.Module):
-    """brainmagick's subject-specific linear map, for a single subject.
+    """brainmagick's subject-specific linear map, one per subject.
+
+    Subject 0 keeps `weight`, the single-subject layer's own parameter, so
+    every earlier checkpoint loads unchanged. Trial 18's all-data training
+    adds the other subjects' maps in `others`.
 
     ATTRS:
-        weight (nn.Parameter): [channels, channels], identity at start
+        weight (nn.Parameter): [channels, channels], subject 0's, identity at start
+        others (nn.Parameter or None): [n_subjects - 1, channels, channels],
+            identity at start; None with one subject
     """
 
-    def __init__(self, channels):
+    def __init__(self, channels, n_subjects=1):
         """
         ARGS:
             channels (int): width in and out
+            n_subjects (int): 1, or 1 + the other subjects trained on
         """
         super().__init__()
 
         #identity, so with one subject the layer starts as a no-op
         self.weight = nn.Parameter(torch.eye(channels))
+        self.others = None
+        if n_subjects > 1:
+            self.others = nn.Parameter(torch.eye(channels).repeat(n_subjects - 1, 1, 1))
 
-    def forward(self, x):
+    def forward(self, x, subject=None):
         """
         ARGS:
             x (torch.Tensor): [batch, channels, n_times]
+            subject (torch.Tensor or None): [batch] int64, 0 for subject 0;
+                None is subject 0 throughout (prediction, scoring)
 
         RETURNS:
             same shape
         """
-        return torch.einsum("bct,cd->bdt", x, self.weight)
+        out = torch.einsum("bct,cd->bdt", x, self.weight)
+        if subject is None:
+            return out
+
+        #⚠️ a single-subject layer must never be handed another subject
+        if self.others is None:
+            assert int(subject.max()) == 0, "subject indices above 0 for a single-subject layer"
+            return out
+
+        #one map per subject present, so memory stays [batch, channels, n_times]
+        for index in subject.unique().tolist():
+            if index > 0:
+                chosen = subject == index
+                out[chosen] = torch.einsum("bct,cd->bdt", x[chosen], self.others[index - 1])
+        return out

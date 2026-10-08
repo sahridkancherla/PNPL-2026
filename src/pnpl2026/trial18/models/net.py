@@ -67,6 +67,7 @@ class ReferenceNet(nn.Module):
         drop_path=0.0,
         second_head=False,
         refine=None,
+        n_subjects=1,
         **encoder_kwargs,
     ):
         """
@@ -86,6 +87,7 @@ class ReferenceNet(nn.Module):
             second_head (bool): add Variant K's second d_model -> embed_dim map
             refine (dict or None): Variant M's refiner -- layers, bins,
                 seconds, width, bound, query_skip, centre_momentum
+            n_subjects (int): subject layers; above 1 for all-data training
             **encoder_kwargs: to WordEncoder -- spatial, positions, pca, hidden...
         """
         super().__init__()
@@ -95,6 +97,7 @@ class ReferenceNet(nn.Module):
             sample_rate,
             clamp=clamp,
             baseline_seconds=baseline_seconds,
+            n_subjects=n_subjects,
             **encoder_kwargs,
         )
 
@@ -145,13 +148,14 @@ class ReferenceNet(nn.Module):
                 centre_momentum=float(refine["centre_momentum"]),
             )
 
-    def forward(self, windows, lengths, sequence, position):
+    def forward(self, windows, lengths, sequence, position, subject=None):
         """
         ARGS:
             windows (torch.Tensor): [N, n_channels, n_times], zero-padded
             lengths (torch.Tensor): [N] real samples per window
             sequence (torch.Tensor): [N] which sequence each word belongs to
             position (torch.Tensor): [N] its place in that sequence
+            subject (torch.Tensor or None): [N] subject layers; None is subject 0
 
         RETURNS:
             dict:
@@ -170,7 +174,7 @@ class ReferenceNet(nn.Module):
             f"sequence {tuple(sequence.shape)} and position {tuple(position.shape)} for {n_words} windows"
         )
 
-        words, tapped = self.encoder.features(windows, lengths, self.tap_layers)
+        words, tapped = self.encoder.features(windows, lengths, self.tap_layers, subject)
         context = words
         if self.sentence is not None:
             grid, valid = self._grid(words, sequence, position)

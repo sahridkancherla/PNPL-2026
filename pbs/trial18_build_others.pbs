@@ -1,0 +1,50 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=32gb
+#PBS -l walltime=02:00:00
+#PBS -N pnpl-trial18-others
+#PBS -j oe
+#PBS -o logs/
+
+# Build the other subjects' cache ONCE, before any all-data run: every
+# LibriBrain100 broad-track recording (32 subjects, Sherlock1 sessions 11 and
+# 12) at 50 Hz, robust-scaled per recording, plus word tables -- the same
+# steps as subject 0's cache. A CPU job: it reads every h5 in full. No GPU.
+#
+#     qsub pbs/trial18_build_others.pbs
+#
+# Walltime: about a quarter of subject 0's ~38 GB build, which ran well
+# inside 2 h. A killed build resumes: recordings already written are reused.
+#
+# ⚠️ Needs, on RDS, from a LOGIN node first (outbound internet):
+#     uv run python -m src.pnpl2026.cli.prepare --partition validation
+#     uv run python -m src.pnpl2026.cli.prepare --partition test
+# and subject 0's cache, data/trial10_reference/, for the channel order.
+#
+# ⚠️ Submit from the repo root. `-o logs/` is resolved against where qsub ran.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+export PYTHONUNBUFFERED=1
+# uv on a compute node must never try the network: offline, it fails at once.
+export UV_OFFLINE=1
+
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.trial18_build_others.live.log"
+echo "live log: $LIVE_LOG"
+
+{
+    n_recordings=$(ls data/*/derivatives/serialised/sub-*_meg.h5 2>/dev/null | grep -vc "/sub-0_" || true)
+    echo "[others] $n_recordings other-subject recordings downloaded"
+    if [ "$n_recordings" -eq 0 ]; then
+        echo "[others] none under data/ -- run cli.prepare (validation, test) on a login node" >&2
+        exit 1
+    fi
+    if [ ! -f data/trial10_reference/manifest.json ]; then
+        echo "[others] no data/trial10_reference/ -- subject 0's cache comes first" >&2
+        exit 1
+    fi
+
+    uv run --frozen python -m pnpl2026.trial18.cli.build_others
+} 2>&1 | tee "$LIVE_LOG"

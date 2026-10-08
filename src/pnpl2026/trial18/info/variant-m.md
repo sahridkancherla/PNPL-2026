@@ -109,6 +109,15 @@ noise. Every non-zero strength on s0 and s2 cost 1.3-2.8. The test columns
 therefore equal G2's (FRAG test 31.80, ref test 69.31 against 69.32). No
 submission: the 3-seed M ensemble is G2 with one seed nudged.
 
-Pending: whether training BAcc rose while validation fell (overfitting the
-training sessions) or neither moved (the refiner never learned), from each
-run's metrics.csv.
+Why (each run's metrics.csv): the refiner barely moved TRAINING accuracy --
++0.1 to +0.3 over the frozen base in every epoch of every seed (s0 69.1 ->
+69.4, s1 72.8 -> 73.2, s2 75.6 -> 75.7) -- while validation sat 1.5-3 below
+the base from the first epoch. So there was almost nothing to gain even on
+the training sessions: on ~80 h of one subject, the base already uses what
+the first second's conv features carry. HDND's gains came from smaller,
+weaker baselines (Armeni ~10 h; its own ablation puts most of the gain in
+the second-stage fine-tuning, not the pyramid). The small correction it did
+learn hurt validation at every strength on two seeds of three.
+
+**Dropped.** A retry (higher lr, query skip on) would at best recover the
++0.2 seen on training data.

@@ -11,6 +11,11 @@ trains. After the fit, validation is scored at every `refine_strengths`
 value and the best -- 0, the base itself, on a tie or a loss -- is written
 into best.ckpt (`refine_strength.json` keeps the curve).
 
+All-data training (`train_partitions` beyond "train", or `others_cache_dir`):
+validation is no longer clean, so the run trains a fixed number of epochs --
+`epochs_from`'s mean best epoch count, else `max_epochs` -- with no early
+stopping, and best.ckpt is the last epoch. Its local scores are flagged.
+
 The last file names the run and carries its changes; `configs/trial18/runs.txt`
 is the queue and `info/variant-k.md` says what each run asks. Needs trial 10's
 reference cache and all-word t5 table (`pnpl2026.trial10.cli.build_reference`
@@ -31,10 +36,12 @@ from __future__ import annotations
 
 import argparse
 import gc
+import glob
 import json
 import shutil
 import subprocess
 import sys
+from dataclasses import replace
 from datetime import datetime
 
 import lightning as L
@@ -44,9 +51,10 @@ import yaml
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint, TQDMProgressBar
 from lightning.pytorch.loggers import CSVLogger
 
-from ...config import RUNS_DIR
+from ...config import REPO_ROOT, RUNS_DIR
 from ..config import REFINE_RUN_FIELDS, load_trial18_config, refinement_config
 from ..data import Trial18DataModule
+from ..data.dataset import load_manifest
 from ..embeddings import TargetTable
 from ..lit import LitTrialEighteen, load_trained
 from ..throttle import ThermalThrottle
@@ -124,6 +132,43 @@ def epoch_metrics(run_dir, epoch):
     return found
 
 
+def all_data_settings(cfg):
+    """All-data training: the subject count, and the fixed epoch count.
+
+    ARGS:
+        cfg (Trial18Config)
+
+    RETURNS:
+        Trial18Config - n_subjects from the others' cache; max_epochs from
+        `epochs_from` when validation is not clean
+    """
+    #one subject layer per other subject, after subject 0's
+    if cfg.others_cache_dir:
+        subjects = load_manifest(cfg.resolved_others_cache_dir())["subjects"]
+        cfg = replace(cfg, n_subjects=1 + len(subjects))
+        print(f"[train] all-data: {len(subjects)} other subjects' recordings join training")
+    if cfg.clean_selection:
+        return cfg
+
+    #⚠️ validation is in training, or heard by the others: no selection on it
+    if cfg.epochs_from:
+        files = sorted(glob.glob(str(REPO_ROOT / cfg.epochs_from)))
+        if not files:
+            raise SystemExit(f"epochs_from {cfg.epochs_from} matches no file.")
+        best = []
+        for name in files:
+            with open(name, encoding="utf-8") as handle:
+                best.append(int(json.load(handle)["epoch"]) + 1)
+        cfg = replace(cfg, max_epochs=max(1, round(sum(best) / len(best))))
+        print(f"[train] all-data: {len(files)} earlier runs stopped best at {best} epochs -> {cfg.max_epochs}")
+    print(
+        f"[train] WARNING: validation is not clean (train_partitions {list(cfg.train_partitions)}, "
+        f"others {'yes' if cfg.others_cache_dir else 'no'}): a fixed {cfg.max_epochs} epochs, no early "
+        f"stopping, best.ckpt is the LAST epoch, and local scores are not evidence"
+    )
+    return cfg
+
+
 def store_best_strength(checkpoint_path, cfg, datamodule, run_dir):
     """Variant M: score validation at each strength, keep the best in the checkpoint.
 
@@ -176,6 +221,7 @@ def main():
             f"[train] Variant M: refining {base_path.parent.name}/{base_path.name} (epoch {base_info['epoch']}), "
             f"frozen; its settings kept but for {len(REFINE_RUN_FIELDS)} run fields"
         )
+    cfg = all_data_settings(cfg)
     L.seed_everything(cfg.seed, workers=True)
 
     #threads capped before any tensor work; torch reads this once
@@ -259,6 +305,12 @@ def main():
     #weights only: at 204M parameters the optimiser state is another 1.6 GB per
     #file, and only last.ckpt -- the one --resume reads -- needs it
     best = ModelCheckpoint(dirpath=run_dir, filename="best", monitor=monitor, mode="max", save_weights_only=True)
+    selection = [best, EarlyStopping(monitor=monitor, mode="max", patience=cfg.patience, verbose=True)]
+
+    #all-data: no selection on an unclean validation set; last.ckpt becomes
+    #best.ckpt after the fit (Lightning refuses two monitor-less checkpointers)
+    if not cfg.clean_selection:
+        selection = []
 
     trainer = L.Trainer(
         max_epochs=cfg.max_epochs,
@@ -269,12 +321,11 @@ def main():
         default_root_dir=run_dir,
         logger=CSVLogger(save_dir=run_dir, name="", version=""),
         callbacks=[
-            best,
+            *selection,
             #⚠️ last.ckpt from its own callback, refreshed every epoch. On
             #Lightning 2.6 save_last on the callback above writes only on
             #improvement, so a resume after a plateau would go back in time
             ModelCheckpoint(dirpath=run_dir, filename="last", monitor=None, save_top_k=1),
-            EarlyStopping(monitor=monitor, mode="max", patience=cfg.patience, verbose=True),
             #off a terminal every refresh is a new log line; throttle it there
             TQDMProgressBar(refresh_rate=1 if sys.stdout.isatty() else 200),
             throttle,
@@ -290,6 +341,11 @@ def main():
 
     #best.ckpt when validation ever ran; last.ckpt otherwise (a --max-steps smoke)
     chosen = best.best_model_path or str(last)
+
+    #all-data: the last epoch IS the model; best.ckpt holds it for every reader
+    if not cfg.clean_selection and last.exists():
+        shutil.copy2(last, run_dir / "best.ckpt")
+        chosen = str(run_dir / "best.ckpt")
 
     #Variant M: how much of the correction to apply, chosen on validation
     if cfg.has_refiner:
@@ -311,6 +367,8 @@ def main():
 
     #the train-val gap at the selected epoch, as the rules ask
     report["selected_epoch_metrics"] = epoch_metrics(run_dir, report["epoch"])
+    if not cfg.clean_selection:
+        report["selection"] = "fixed epochs, last kept: local validation and test are NOT clean"
     (run_dir / "evaluation.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"[train] scored {chosen} -> {run_dir / 'evaluation.json'}")
 

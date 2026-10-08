@@ -25,6 +25,11 @@ on the test partition, and so is this trial.
 rather than 306 strided ones.
 
 ⚠️ Heavy: reads every h5 in full. pbs/trial10_build.pbs runs it as a CPU job.
+
+Trial 18 adds `build_others`: the same processing for every OTHER subject's
+recordings (LibriBrain100's 32 broad-track subjects, Sherlock1 sessions 11
+and 12), into a cache of their own whose keys carry `sub-<id>` and whose
+records name their subject. Subject 0's cache is not touched.
 """
 
 from __future__ import annotations
@@ -73,14 +78,17 @@ PCA_SAMPLES_PER_RECORDING = 4000
 CLAMP = 5.0
 
 
-def discover_recordings(data_dir):
-    """Find every subject-0 recording with both an h5 and an events table.
+def discover_recordings(data_dir, subjects=(SUBJECT,)):
+    """Find every recording of the chosen subjects with both an h5 and an events table.
 
     ARGS:
         data_dir (Path): the download root, from `config.DATA_DIR`
+        subjects (collection or None): subject ids kept; None keeps every
+            subject but 0
 
     RETURNS:
-        list of dict: meg_path, events_path, session, task, run, key -- sorted
+        list of dict: meg_path, events_path, subject, session, task, run,
+        key -- sorted. Subject 0's keys are trial 10's; others' start sub-<id>
     """
     meg_paths = sorted(Path(data_dir).glob("*/derivatives/serialised/*_meg.h5"))
 
@@ -89,8 +97,11 @@ def discover_recordings(data_dir):
         #"sub-0_ses-10_task-Sherlock1_run-1_proc-..._meg" -> its fields
         parts = dict(piece.split("-", 1) for piece in meg_path.stem.split("_") if "-" in piece)
 
-        #⚠️ the validation and test downloads can bring other subjects too
-        if parts.get("sub") != SUBJECT:
+        #⚠️ the validation and test downloads bring other subjects too
+        subject = parts.get("sub")
+        if subject is None or (subjects is None and subject == SUBJECT):
+            continue
+        if subjects is not None and subject not in subjects:
             continue
 
         stem = f"sub-{parts['sub']}_ses-{parts['ses']}_task-{parts['task']}_run-{parts['run']}"
@@ -98,14 +109,19 @@ def discover_recordings(data_dir):
         if not events_path.exists():
             continue
 
+        #subject 0 keeps trial 10's keys, so its cache stays readable as built
+        key = f"ses-{parts['ses']}_task-{parts['task']}_run-{parts['run']}"
+        if subject != SUBJECT:
+            key = f"sub-{subject}_{key}"
         recordings.append(
             {
                 "meg_path": meg_path,
                 "events_path": events_path,
+                "subject": subject,
                 "session": parts["ses"],
                 "task": parts["task"],
                 "run": parts["run"],
-                "key": f"ses-{parts['ses']}_task-{parts['task']}_run-{parts['run']}",
+                "key": key,
             }
         )
     return recordings
@@ -373,6 +389,116 @@ def build_reference(data_dir, out_dir, force=False, seed=0):
         "layout": "time-major [n_times, n_channels], per-recording robust-scaled, not clamped",
         "channel_names": names,
         "has_positions": positions is not None,
+        "recordings": recordings,
+        "skipped": skipped,
+    }
+    with open(out_dir / "manifest.json", "w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2)
+    return manifest
+
+
+def build_others(data_dir, out_dir, reference_dir, force=False, seed=0):
+    """Write a cache of every other subject's recordings, processed as subject 0's.
+
+    Only recordings pnpl's LibriBrain100 manifest lists are taken. All of them
+    are training data here, whatever pnpl's own partition (kept as
+    `pnpl_partition`): they are subject 0's validation and test STORIES, heard
+    by other people.
+
+    ARGS:
+        data_dir (Path): the download root holding the task folders
+        out_dir (Path): where the others' cache is written
+        reference_dir (Path): subject 0's cache, for its channel order and
+            sensor positions
+        force (bool): rebuild recordings that already exist
+        seed (int): for the scalers' segments
+
+    RETURNS:
+        manifest (dict)
+    """
+    from pnpl.datasets.libribrain100.manifest import RUN_RECORDS
+
+    out_dir, reference_dir = Path(out_dir), Path(reference_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    generator = np.random.default_rng(seed)
+
+    #subject 0's sensors: every other recording must list them in this order
+    with open(reference_dir / "manifest.json", encoding="utf-8") as handle:
+        reference = json.load(handle)
+    names = reference["channel_names"]
+
+    #pnpl's own partition for each other subject's recording
+    listed = {
+        (record.subject, record.session, record.task, record.run): record.partition
+        for record in RUN_RECORDS
+        if record.subject != SUBJECT
+    }
+
+    recordings, skipped = [], []
+    for found in discover_recordings(data_dir, subjects=None):
+        pnpl_partition = listed.get((found["subject"], found["session"], found["task"], found["run"]))
+        if pnpl_partition is None:
+            skipped.append({"key": found["key"], "reason": "not in pnpl's manifest"})
+            continue
+
+        meg_file = out_dir / f"meg_{found['key']}.npy"
+        words_file = out_dir / f"words_{found['key']}.npz"
+        scaler_file = out_dir / f"scaler_{found['key']}.npz"
+
+        #an existing triple is reused unless forced, so a killed build resumes
+        if force or not (meg_file.exists() and words_file.exists() and scaler_file.exists()):
+            with h5py.File(found["meg_path"], "r") as handle:
+                recording = handle[H5_DATASET_KEY][:]
+                these_names = read_channel_names(handle)
+
+            #⚠️ one set of positions describes every subject's sensors
+            if names is not None and these_names is not None and these_names != names:
+                raise ValueError(f"{found['key']} lists its channels unlike subject 0's cache")
+
+            downsampled = downsample(recording)
+            median, iqr = fit_robust_scaler(downsampled, generator)
+            scaled = (downsampled - median[:, None]) / iqr[:, None]
+            np.save(meg_file, np.ascontiguousarray(scaled.T).astype(np.float16))
+            np.savez(words_file, **load_word_table(found["events_path"]))
+            np.savez(scaler_file, median=median, iqr=iqr)
+
+        meg = np.load(meg_file, mmap_mode="r")
+        with np.load(words_file) as table:
+            n_words = int(len(table["primary"]))
+            n_in_vocab = int((table["primary"] >= 0).sum())
+            n_sentences = int(len(np.unique(table["sentence"][table["sentence"] >= 0])))
+        recordings.append(
+            {
+                "key": found["key"],
+                "subject": found["subject"],
+                "session": found["session"],
+                "task": found["task"],
+                "run": found["run"],
+                "partition": "train",
+                "pnpl_partition": pnpl_partition,
+                "n_times": int(meg.shape[0]),
+                "n_words": n_words,
+                "n_in_vocab": n_in_vocab,
+                "n_sentences": n_sentences,
+            }
+        )
+        print(
+            f"[others] {found['key']:48s} {meg.shape[0] / SAMPLE_RATE_OUT / 60:5.1f} min "
+            f"{n_words:6d} words {n_in_vocab:6d} in-vocab"
+        )
+
+    #subject 0's positions, so the merger reads every subject's sensors alike
+    has_positions = (reference_dir / "positions.npy").exists()
+    if has_positions:
+        np.save(out_dir / "positions.npy", np.load(reference_dir / "positions.npy"))
+
+    manifest = {
+        "sample_rate": SAMPLE_RATE_OUT,
+        "n_channels": 306,
+        "layout": "time-major [n_times, n_channels], per-recording robust-scaled, not clamped",
+        "channel_names": names,
+        "has_positions": has_positions,
+        "subjects": sorted({record["subject"] for record in recordings}, key=lambda subject: int(subject)),
         "recordings": recordings,
         "skipped": skipped,
     }

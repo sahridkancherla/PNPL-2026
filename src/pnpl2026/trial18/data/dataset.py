@@ -56,40 +56,71 @@ def load_manifest(cache_dir):
 
 
 class ReferenceRecordings:
-    """One pnpl partition of the cache: recordings and their word tables.
+    """pnpl partitions of the cache, and optionally the other subjects': recordings and word tables.
 
     ATTRS:
-        cache_dir (Path)
+        cache_dir (Path): subject 0's cache
         sample_rate (float): 50 Hz
-        records (list): the manifest's entries for this partition
+        records (list): the manifests' entries, each with its `cache_dir` and
+            `subject_index` (0 for subject 0, 1.. for the others)
         tables (list): word tables, as dicts of arrays
         n_times (list): samples per recording
     """
 
-    def __init__(self, cache_dir, partition):
+    def __init__(self, cache_dir, partition, others_dir=None):
         """
         ARGS:
-            cache_dir (Path or str)
-            partition (str): "train", "validation" or "test", pnpl's own
+            cache_dir (Path or str): subject 0's cache
+            partition (str or list): "train", "validation" or "test", pnpl's
+                own; a list takes several
+            others_dir (Path or str or None): the other subjects' cache
+                (cli.build_others), every recording of it added
         """
         self.cache_dir = Path(cache_dir)
         manifest = load_manifest(cache_dir)
         self.sample_rate = float(manifest["sample_rate"])
+        partitions = [partition] if isinstance(partition, str) else list(partition)
 
         #the partition was fixed at build time from pnpl's manifest; honour it
-        self.records = [r for r in manifest["recordings"] if r["partition"] == partition]
+        self.records = [
+            dict(record, cache_dir=str(self.cache_dir), subject_index=0)
+            for record in manifest["recordings"]
+            if record["partition"] in partitions
+        ]
         if not self.records:
             raise ValueError(
-                f"No {partition} recordings in {cache_dir}. Download them, then rebuild:\n"
-                f"    python -m pnpl2026.cli.prepare --partition {partition} --subjects deep"
+                f"No {partitions} recordings in {cache_dir}. Download them, then rebuild:\n"
+                f"    python -m pnpl2026.cli.prepare --partition {partitions[0]} --subjects deep"
             )
+
+        #all-data: every other subject's recording, its subject a layer of its own
+        if others_dir is not None:
+            others = load_manifest(others_dir)
+            if float(others["sample_rate"]) != self.sample_rate:
+                raise ValueError(f"{others_dir} is {others['sample_rate']} Hz; subject 0's cache is {self.sample_rate}.")
+            subjects = list(others["subjects"])
+            self.records += [
+                dict(record, cache_dir=str(others_dir), subject_index=1 + subjects.index(record["subject"]))
+                for record in others["recordings"]
+            ]
 
         self.tables = []
         for record in self.records:
-            with np.load(self.cache_dir / f"words_{record['key']}.npz") as stored:
+            with np.load(Path(record["cache_dir"]) / f"words_{record['key']}.npz") as stored:
                 self.tables.append({name: stored[name] for name in stored.files})
         self.n_times = [int(record["n_times"]) for record in self.records]
         self._handles = {}
+
+    def subject_index(self, recording):
+        """The subject layer one recording's windows go through.
+
+        ARGS:
+            recording (int): index into `records`
+
+        RETURNS:
+            int: 0 for subject 0
+        """
+        return int(self.records[recording]["subject_index"])
 
     def meg(self, recording):
         """The memory-mapped [n_times, 306] array of one recording.
@@ -101,8 +132,8 @@ class ReferenceRecordings:
             np.memmap, float16
         """
         if recording not in self._handles:
-            key = self.records[recording]["key"]
-            self._handles[recording] = np.load(self.cache_dir / f"meg_{key}.npy", mmap_mode="r")
+            record = self.records[recording]
+            self._handles[recording] = np.load(Path(record["cache_dir"]) / f"meg_{record['key']}.npy", mmap_mode="r")
         return self._handles[recording]
 
     def __getstate__(self):
@@ -294,7 +325,8 @@ class SequenceWindows(Dataset):
             dict of tensors, one row per word:
                 windows [n_tokens, 306, window_samples] float16, zero past
                 each window's length; lengths, targets, primary, moses
-                [n_tokens] int64; isolated [n_tokens] bool
+                [n_tokens] int64; isolated [n_tokens] bool; subject
+                [n_tokens] int64, the subject layer (0 is subject 0)
         """
         sequence = self.sequences[index]
         meg = self.recordings.meg(sequence.recording)
@@ -347,6 +379,7 @@ class SequenceWindows(Dataset):
             "primary": torch.from_numpy(primary.astype(np.int64)),
             "moses": torch.from_numpy(moses.astype(np.int64)),
             "isolated": torch.full((n_tokens,), isolated, dtype=torch.bool),
+            "subject": torch.full((n_tokens,), self.recordings.subject_index(sequence.recording), dtype=torch.int64),
         }
 
 

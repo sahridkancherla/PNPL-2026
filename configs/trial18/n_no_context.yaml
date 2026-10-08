@@ -1,0 +1,9 @@
+# N -- G2 with no sentence transformer: every word read from its own 3 s
+# window alone, no attention across words. Tests the research note's main
+# claim on the board (trial 7's ablation, on an older model, cost 11 points
+# locally on sentence words), and gives the mix a member that cannot use
+# word order at all. Compare with G2 (63.41) and in the best mix (67.00).
+run_name: trial18_n
+
+model_kwargs:
+  sentence_depth: 0

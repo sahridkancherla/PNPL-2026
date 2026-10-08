@@ -266,6 +266,7 @@ class LitTrialEighteen(L.LightningModule):
             pca=spatial.get("pca"),
             second_head=cfg.has_second_head,
             refine=cfg.refine_settings(),
+            n_subjects=cfg.n_subjects,
             **cfg.model_kwargs,
         )
 
@@ -304,7 +305,8 @@ class LitTrialEighteen(L.LightningModule):
         RETURNS:
             dict from ReferenceNet.forward
         """
-        return self.model(batch["windows"], batch["lengths"], batch["sequence"], batch["position"])
+        #all-data batches name each window's subject; prediction's do not (subject 0)
+        return self.model(batch["windows"], batch["lengths"], batch["sequence"], batch["position"], batch.get("subject"))
 
     def on_fit_start(self):
         """Build the EMA -- or move a restored one -- onto the module's device."""
