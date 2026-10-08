@@ -131,4 +131,12 @@ are too few); `cli.lone_fill` fills them after. Output `<stem>_hubh.csv`.
 
 Checked on synthetic dumps and a CSV in the holdout's layout, three hub
 words planted: shares 13-94% -> 20-20% on the sentence rows, lone rows'
-rankings unchanged, every CSV check passed. Pending: the board.
+rankings unchanged, every CSV check passed.
+
+**Board (2026-10-08): 67.00, the best score so far.** On the Kn mix, the
+rule chose zscore (+1.74 transductive on the local test run words; frozen
+zscore +1.18, frozen balance_half +1.61; full balance only +0.3). Holdout
+sentence rows' top-10 shares went from 2-50% to 12-30%.
+`ens_g1g2kn_f1w1024_ts_hubh_lone` scored 67.003 against its parent's 66.121:
++0.88, in the direction the local check said, though under the board's
+~2-point noise. Apply it to every final candidate.
