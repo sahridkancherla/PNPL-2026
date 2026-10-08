@@ -138,13 +138,13 @@ def main():
 
     headers = ["run", "seeds", "status"] + list(COLUMNS) + ["train"]
     lines = [
-        "# Trial 17 -- Variant L: G2 trained on holdout-matched runs",
+        "# Trial 18 -- Variant M: HDND refinement on frozen checkpoints",
         "",
         "BAcc@10 in percent; chance 20. FRAG is the fragment protocol, shaped like the",
         "holdout; `+bn` re-estimates BatchNorm on the scored inputs. A config's first",
         "row is the mean over its finished seeds, +/- the spread (max - min) / 2.",
-        "Compare K0 with trial 15's I2 and K with K0, seed for seed; only the",
-        "leaderboard can judge a preprocessing change (see info/variant-k.md).",
+        "Compare each refined run with its base, seed for seed; each run's",
+        "refine_strength.json holds the validation curve (see info/variant-m.md).",
         "",
         "| " + " | ".join(headers) + " |",
         "|" + "---|" * len(headers),

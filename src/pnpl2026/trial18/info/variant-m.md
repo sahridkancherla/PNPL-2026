@@ -94,4 +94,21 @@ then predict each seed, plain and with onset shifts, as trial 17 does
 
 ## Results
 
-Pending: the 3-seed wave on G2, local, then the board.
+### M on G2, local (2026-10-08): the refiner did not help -- a negative result
+
+Validation BAcc@10 (fragment protocol) at each strength; 0 is G2 itself:
+
+| seed | 0 | 0.125 | 0.25 | 0.5 | 1 | chosen |
+|---|---|---|---|---|---|---|
+| s0 | **39.66** | 38.60 | 38.13 | 38.35 | 38.11 | 0 |
+| s1 | 35.43 | **35.61** | 34.96 | 33.80 | 34.44 | 0.125 |
+| s2 | **40.22** | 37.43 | 37.43 | 38.01 | 37.71 | 0 |
+
+Two seeds of three switched the refiner off; the third kept a +0.18 that is
+noise. Every non-zero strength on s0 and s2 cost 1.3-2.8. The test columns
+therefore equal G2's (FRAG test 31.80, ref test 69.31 against 69.32). No
+submission: the 3-seed M ensemble is G2 with one seed nudged.
+
+Pending: whether training BAcc rose while validation fell (overfitting the
+training sessions) or neither moved (the refiner never learned), from each
+run's metrics.csv.
