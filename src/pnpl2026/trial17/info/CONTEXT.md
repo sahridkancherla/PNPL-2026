@@ -12,6 +12,7 @@ last onset. A copy of trial 16's code (2026-10-07) minus its layer check.
 | the new settings | `../config.py` (`run_p`, `run_max_skipped`) |
 | compliant prediction, onset shifts, lone-word ensembling | `../cli/predict.py`, `../cli/training_scaler.py`, `../cli/ensemble.py` |
 | hub correction (querybank normalisation, no training) | `hub-correction.md`, `../hubnorm.py`, `../cli/hubnorm.py` |
+| hub correction fitted on the holdout's own rows (transductive) | `hub-correction.md`, `../cli/hubnorm_holdout.py` |
 | which recipe fills the lone-word rows (private board only; local comparison) | `../cli/lone_check.py`; results in `hub-correction.md` |
 | write the chosen lone-word recipe into a submission | `../cli/lone_fill.py` |
 | screen models before submitting: holdout vs local agreement with G2 | `../cli/screen.py` |

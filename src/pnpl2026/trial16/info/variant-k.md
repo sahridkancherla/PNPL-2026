@@ -124,6 +124,17 @@ validation and full context, higher on lone words; Kn above K0n on most
 columns. Seeds spread widely (K0n FRAG test 24-40). Local columns have not
 ranked recipes like the board before; the board decides.
 
-Pending: the K0n/Kn wave on the board,
-`runs/trial16_results.md`, and the compliant 3-seed ensembles on the
-leaderboard.
+### Board (2026-10-08), all compliant
+
+| file | board | against |
+|---|---|---|
+| `trial16_k0n_ens_ts_lone` | **61.38** | G2 63.41: -2.0, inside the 2-point line |
+| `trial16_kn_ens_ts_lone` | **56.02** | K0n: -5.4, the second head costs alone |
+| `ens_g1g2kn_f1w1024_ts_lone` | **66.12** | the same mix without Kn, 64.39: **+1.7** |
+
+By the rule: K0n's three changes (no baseline, jitter, EMA) are a tie with
+G2, not a gain; Kn is dropped as a recipe of its own. But in the mix Kn gave
+the best compliant score so far: weak alone, it makes different mistakes --
+most likely from its second target space (t5 layer 3), the one thing no other
+member has. Trial 17's screen (label-free) put both near G2: top-1 agreement
+on the holdout 59% (K0n) and 54% (Kn), against G1's 51%; no shift from local.

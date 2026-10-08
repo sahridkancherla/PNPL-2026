@@ -1,0 +1,21 @@
+# M on G2 -- HDND's refinement (arXiv 2609.24095) trained on trial 13's G2
+# checkpoints, which stay frozen. Every setting but the fields below comes
+# from the base checkpoint itself (REFINE_RUN_FIELDS in trial18/config.py),
+# so the base's network, data and shaping cannot drift. Compare with G2
+# (63.41 on the board), seed for seed and as a 3-seed ensemble.
+run_name: trial18_mg2
+refine_base: runs/trial13_g2_s{seed}/best.ckpt
+
+# HDND's 128-wide family: KL anchor 0.25, pairing 0.3, lr 2e-4; c = 0.25.
+refine_width: 128
+refine_bound: 0.25
+refine_kl_weight: 0.25
+refine_pair_weight: 0.3
+
+# Only the refiner trains (~0.55M parameters): a short schedule.
+# ⚠️ Exponents with a decimal point: PyYAML loads `2e-4` as a STRING.
+lr: 2.0e-4
+weight_decay: 0.01
+warmup_fraction: 0.05
+max_epochs: 10
+patience: 3

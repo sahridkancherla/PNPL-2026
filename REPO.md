@@ -18,8 +18,8 @@ Keep this file current. A stale map is worse than none.
 | `LICENSE` | MIT. |
 | `.claude/` | Claude's configuration — rules, skills, settings. |
 | `src/pnpl2026/` | the package. Shared machinery at its root; one subpackage per trial. |
-| `configs/` | YAML run configs. `base.yaml` is defaults; a second file overrides it. `trial6/` to `trial17/` hold one file per ablation run; `trial12/` runs trial 10's code; `trial13/leaderboard.csv` records every leaderboard score, `trial14/ensembles.csv` every submitted ensemble's members. |
-| `pbs/` | PBS job scripts for the Imperial HPC. `train.pbs`, `sweep.pbs`, `trial5.pbs`, `trial6.pbs`, `trial7_build.pbs`, `trial7.pbs`, `trial8.pbs`, `trial9.pbs`, `trial10_build.pbs`, `trial10_embed.pbs`, `trial10.pbs`, `trial11.pbs`, `trial12.pbs`, `trial13.pbs`, `trial13_calibrate.pbs`, `trial14.pbs`, `trial14_calibrate.pbs`, `trial15.pbs`, `trial16_embed.pbs`, `trial16.pbs`, `trial17.pbs`. |
+| `configs/` | YAML run configs. `base.yaml` is defaults; a second file overrides it. `trial6/` to `trial18/` hold one file per ablation run; `trial12/` runs trial 10's code; `trial13/leaderboard.csv` records every leaderboard score, `trial14/ensembles.csv` every submitted ensemble's members. |
+| `pbs/` | PBS job scripts for the Imperial HPC. `train.pbs`, `sweep.pbs`, `trial5.pbs`, `trial6.pbs`, `trial7_build.pbs`, `trial7.pbs`, `trial8.pbs`, `trial9.pbs`, `trial10_build.pbs`, `trial10_embed.pbs`, `trial10.pbs`, `trial11.pbs`, `trial12.pbs`, `trial13.pbs`, `trial13_calibrate.pbs`, `trial14.pbs`, `trial14_calibrate.pbs`, `trial15.pbs`, `trial16_embed.pbs`, `trial16.pbs`, `trial17.pbs`, `trial18.pbs`. |
 | `runs/` | checkpoints and per-run logs. Gitignored except `.gitkeep`. |
 | `logs/` | PBS job output and live logs. Gitignored except `.gitkeep`. |
 | `submissions/` | generated submission CSVs. Gitignored except `.gitkeep`. |

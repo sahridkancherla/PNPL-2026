@@ -134,4 +134,14 @@ against agreement locally), not by a submission:
   misleads. Both word-pair fusions (trial 15) also failed on the board, the
   same kind of prior taken from the same transcripts.
 
+**The screen (2026-10-08):** not broken, and no shift. L agrees with G2 on
+12% of top-1 words on the holdout (6x chance; top-10 overlap 45%) and on 15%
+locally (50%); its own seeds agree 71%. G1, K0n and Kn agree with G2 on
+51-59%. So L is a different model in both places: what lifts it locally
+(+15 on the fragment protocol, whose runs come from the training stories'
+sessions) is what sinks it on the holdout. The screen's shortfall column did
+not flag it -- low agreement with G2 on BOTH sides is the warning sign.
+
+In the mix: `ens_g1g2l_f1w1024_ts_lone` **59.24**, against 64.39 without L.
+
 Do not reuse holdout runs as built here.

@@ -53,3 +53,8 @@ ens_g1g2_f1w1024,in_context_ts_lone,64.387,2026-10-07,ens_g1g2_f1w1024_ts_lone.c
 ens_g1g2_f1w1024,in_context_ts_tta,64.637,2026-10-07,ens_g1g2_f1w1024_ts_tta.csv
 probe_lone_reversed,in_context_ts_probe,64.387,2026-10-07,probe_lone_reversed.csv
 trial17_l_ens,in_context_ts_lone,39.831,2026-10-08,trial17_l_ens_ts_lone.csv
+trial16_k0n_ens,in_context_ts_lone,61.383,2026-10-08,trial16_k0n_ens_ts_lone.csv
+trial16_kn_ens,in_context_ts_lone,56.016,2026-10-08,trial16_kn_ens_ts_lone.csv
+ens_g1g2l_f1w1024,in_context_ts_lone,59.237,2026-10-08,ens_g1g2l_f1w1024_ts_lone.csv
+ens_g1g2kn_f1w1024,in_context_ts_lone,66.121,2026-10-08,ens_g1g2kn_f1w1024_ts_lone.csv
+ens_g1g2_f1w1024,in_context_ts_tta_lone,64.637,2026-10-08,ens_g1g2_f1w1024_ts_tta_lone.csv

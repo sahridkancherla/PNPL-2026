@@ -116,3 +116,19 @@ equals its parent's, while the private score should gain on lone words
 (27 -> ~45 locally).
 
 Pending: the run-word on/off pair on the board.
+
+## Fitted on the holdout itself (`cli/hubnorm_holdout.py`, 2026-10-08)
+
+The holdout principle was withdrawn on 2026-10-08 (CLAUDE.md), so the same
+fits may now take the holdout's own 868 sentence rows as their bank -- the
+transductive version. Two reasons it may beat the frozen one: the holdout's
+sources are not ours, so its hubs can be other words; and it reads only the
+CSV, so it corrects any mix, the Kn mix included (Kn has no chunked dumps
+for the frozen bank). Its local check runs the procedure on local test run
+words -- fitted on those very rows -- beside the frozen fit, and `--method
+auto` takes the best transductive gain. Lone rows are left alone (92 rows
+are too few); `cli.lone_fill` fills them after. Output `<stem>_hubh.csv`.
+
+Checked on synthetic dumps and a CSV in the holdout's layout, three hub
+words planted: shares 13-94% -> 20-20% on the sentence rows, lone rows'
+rankings unchanged, every CSV check passed. Pending: the board.

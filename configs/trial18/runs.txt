@@ -1,0 +1,3 @@
+configs/trial18/m_g2.yaml 0
+configs/trial18/m_g2.yaml 1
+configs/trial18/m_g2.yaml 2
