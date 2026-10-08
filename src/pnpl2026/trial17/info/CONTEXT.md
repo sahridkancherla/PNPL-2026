@@ -14,6 +14,7 @@ last onset. A copy of trial 16's code (2026-10-07) minus its layer check.
 | hub correction (querybank normalisation, no training) | `hub-correction.md`, `../hubnorm.py`, `../cli/hubnorm.py` |
 | which recipe fills the lone-word rows (private board only; local comparison) | `../cli/lone_check.py`; results in `hub-correction.md` |
 | write the chosen lone-word recipe into a submission | `../cli/lone_fill.py` |
+| screen models before submitting: holdout vs local agreement with G2 | `../cli/screen.py` |
 | configs and the queue | `configs/trial17/`, `pbs/trial17.pbs` |
 
 Everything else (network, cache, protocols) is trial 16's, unchanged; see

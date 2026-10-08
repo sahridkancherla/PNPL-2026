@@ -110,4 +110,28 @@ EOF
   exact format on thousands of words: I3 41.6 > L 35.1 > Kn 33.3 > K0n 31.6
   > G1/G2 ~29 > F1/w1024 ~23.
 
-Pending: the compliant ensemble against G2 on the board.
+### Board (2026-10-08): 39.83 -- a large negative result
+
+The compliant 3-seed ensemble (`trial17_l_ens_ts_lone.csv`; its lone rows
+I3's, which the public board does not score) scored **39.83**, against
+compliant G2's **63.41**: 23.6 points below, the largest local/board
+inversion yet. Only ~14% of L's training items were actually runs (28.1% of
+sentences can supply one), so a small dose did this much harm.
+
+Two readings, told apart by `cli.screen` (agreement with G2 on the holdout
+against agreement locally), not by a submission:
+
+- **a broken prediction**: agreement with G2 near chance on the holdout.
+  Unlikely in code: diffed 2026-10-08, the holdout path (sequence building,
+  fixed scaler, network, scoring) is trial 15's, which scored G1 and G2
+  exactly as before; the one change, `candidate_scores`, returns
+  `candidate_logits` unchanged with one head. A slip on the day (wrong
+  checkpoint, stale scaler file) is still possible.
+- **behaviour that shifts on the holdout's sources**: L is the only recipe
+  whose sentence transformer trained on list-word-ONLY sequences, so it can
+  learn the training stories' word order among list words. The holdout comes
+  from unrevealed sources; if its runs follow other statistics, that prior
+  misleads. Both word-pair fusions (trial 15) also failed on the board, the
+  same kind of prior taken from the same transcripts.
+
+Do not reuse holdout runs as built here.
