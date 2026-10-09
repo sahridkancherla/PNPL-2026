@@ -74,4 +74,49 @@ words -- do not train P on that table.
 
 ## Results
 
-Pending.
+### Local (2026-10-09), seed means; G2 for comparison
+
+| run | FRAG test | frag val | ref test | ALONE test | train | holdout top-1 / top-10 agreement with G2 |
+|---|---|---|---|---|---|---|
+| G2 (trial 13) | 31.80 | 38.44 | 69.32 | ~29 | -- | 100% / 100% |
+| **N** | 36.18 | 36.65 | **41.63** | **40.66** | 47.32 | **13% / 41%** |
+| **K2** | **37.60** | 41.32 | **72.00** | 32.33 | 75.55 | 60% / 79% |
+| **P** | 29.40 | **43.67** | 70.17 | 28.28 | 73.21 | 56% / 74% |
+
+- N, with no context: full-sentence words fall from 69 to 42, as trial 7 found;
+  lone words rise to 40.7 (G2 ~29, the I3 specialist 41.6). Its holdout
+  agreement with G2 is as low as L's (12%) -- by construction here, not a
+  failure: it reads no neighbour at all. Low local agreement too (14%).
+- K2 leads G2 locally on every column, and agrees with it like K0n/Kn do.
+- P: the best fragment validation, an ordinary test. Its fragment
+  `isolated` column (7.6) is a handful of words.
+- Local columns have never ranked recipes like the board: the board decides.
+
+Mixes against the 67.00 file (sentence rows): every candidate changes the
+top 10 of 47-79% of rows (N most), so each can move the board.
+
+### Board (2026-10-09): K2 lifts the best mix to 68.49
+
+All hub-corrected on the holdout, lone rows I3's:
+
+| file | board | against 67.00 |
+|---|---|---|
+| **+ K2** (`ens_g1g2kn_k2_f1w1024_ts_hubh_lone`) | **68.488** | **+1.49, the new best** |
+| + N | 67.409 | +0.41 |
+| + P | 67.361 | +0.36 |
+| K2 in Kn's place | 67.274 | +0.27 |
+
+A second target space helps twice over: Kn and K2 each help, and together
+most. N and P each add a little. N alone was not submitted (the user's call).
+
+### Next wave (fixed 2026-10-09): more second target spaces
+
+The only model change that has moved the mix up, twice. Configs only:
+
+| run | file | the change from K2 |
+|---|---|---|
+| K6 | `k6_layer6.yaml` | second head on t5 layer 6 |
+| K18 | `k18_layer18.yaml` | second head on t5 layer 18 |
+| K1 | `k1_fragments_layer3.yaml` | G1's shaping (fragments 0.5, no lone words) |
+
+`runs.txt` lines 16-24; each judged by adding it to the 68.49 mix.

@@ -1,0 +1,8 @@
+# K1 -- K2's layer-3 head on G1's shaping instead of G2's: half the training
+# sentences cut to holdout-like fragments, no lone words (trial 13's G1).
+# Different on both axes the mix rewards. Judged by adding to the best mix.
+run_name: trial18_k1
+
+fragment_p: 0.5
+isolated_p: 0.0
+second_embeddings: data/word_embeddings_t5_layer3.npz

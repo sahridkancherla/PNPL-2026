@@ -88,4 +88,15 @@ switches and an `epochs_from` pointing at that recipe's own runs.
 
 ## Results
 
-Pending.
+12 of the 32 broad subjects are published (pnpl's repositories lack 13-32,
+2026-10-09): 24 recordings, 9.7 h, 32,064 in-vocabulary words -- about +10%
+on subject 0's own. G2 on everything (3 seeds): local columns not clean
+(ref test 68.56, FRAG 32.18); on the holdout it agrees with G2 more than any
+other recipe (top-1 63%, top-10 82%; its own seeds 81%).
+
+**Board (2026-10-09): a clear loss -- dropped.** Alone, `trial18_all_g2_ens_ts_lone`
+scored **54.79** against G2's 63.41 (-8.6). In G2's place in the 67.00 mix it
+scored 67.003, no change. Not separable from here: the others' two sessions
+repeated 13 times an epoch (the memorisation risk named above), the fixed
+epoch count with no selection, or other brains in the shared encoder. Do not
+use for the final runs.

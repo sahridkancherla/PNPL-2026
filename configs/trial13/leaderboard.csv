@@ -62,3 +62,9 @@ ens_g1g2kn_f1w1024,in_context_ts_tta_lone,65.121,2026-10-08,ens_g1g2kn_f1w1024_t
 ens_g1g2k0nkn_f1w1024,in_context_ts_lone,64.787,2026-10-08,ens_g1g2k0nkn_f1w1024_ts_lone.csv
 ens_g1g2k0nkn_f1w1024,in_context_ts_tta_lone,65.073,2026-10-08,ens_g1g2k0nkn_f1w1024_ts_tta_lone.csv
 ens_g1g2kn_f1w1024,in_context_ts_hubh_lone,67.003,2026-10-08,ens_g1g2kn_f1w1024_ts_hubh_lone.csv
+ens_g1allkn_f1w1024,in_context_ts_hubh_lone,67.003,2026-10-09,ens_g1allkn_f1w1024_ts_hubh_lone.csv
+ens_g1g2kn_n_f1w1024,in_context_ts_hubh_lone,67.409,2026-10-09,ens_g1g2kn_n_f1w1024_ts_hubh_lone.csv
+ens_g1g2kn_k2_f1w1024,in_context_ts_hubh_lone,68.488,2026-10-09,ens_g1g2kn_k2_f1w1024_ts_hubh_lone.csv
+ens_g1g2k2_f1w1024,in_context_ts_hubh_lone,67.274,2026-10-09,ens_g1g2k2_f1w1024_ts_hubh_lone.csv
+ens_g1g2kn_p_f1w1024,in_context_ts_hubh_lone,67.361,2026-10-09,ens_g1g2kn_p_f1w1024_ts_hubh_lone.csv
+trial18_all_g2_ens,in_context_ts_lone,54.793,2026-10-09,trial18_all_g2_ens_ts_lone.csv

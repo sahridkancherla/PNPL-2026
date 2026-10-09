@@ -1,0 +1,7 @@
+# K6 -- K2 with its second head on t5 layer 6 instead of 3. K2's second
+# target space added +1.5 to the best mix (68.49); layer 6 is another space
+# (the hub check: Spearman +0.53 with the middle layer, layer 3's +0.27).
+# Judged by adding to the best mix.
+run_name: trial18_k6
+
+second_embeddings: data/word_embeddings_t5_layer6.npz

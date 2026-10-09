@@ -1,0 +1,5 @@
+# K18 -- K2 with its second head on t5 layer 18, a late layer (the hub check:
+# Spearman +0.57 with the middle layer). Judged by adding to the best mix.
+run_name: trial18_k18
+
+second_embeddings: data/word_embeddings_t5_layer18.npz
