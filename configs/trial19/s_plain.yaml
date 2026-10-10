@@ -1,0 +1,3 @@
+# S -- the continuous family alone: the t5 head only, G2's data recipe.
+# The family's baseline: against G2 (63.41) alone, and in the 69.08 mix.
+run_name: trial19_s

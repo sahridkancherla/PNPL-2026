@@ -1,0 +1,48 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=32gb
+#PBS -l walltime=03:00:00
+#PBS -N pnpl-trial19-build
+#PBS -j oe
+#PBS -o logs/
+
+# Build a 100 Hz reference cache ONCE, for trial 19's wave-2 option (the
+# 10 Oct note's change 4): every subject-0 recording of all three pnpl
+# partitions, 306 sensors resampled 250 -> 100 Hz and robust-scaled per
+# recording (~8 GB, twice the 50 Hz cache), plus word tables, positions and
+# the training PCA. A CPU job -- it reads every h5 in full. No GPU.
+#
+#     qsub pbs/trial19_build.pbs
+#
+# Then, for a 100 Hz run: `sfreq: 100`, `cache_dir: data/trial19_reference_100hz`
+# and `stem_stride: 4` in its config, a 100 Hz training scaler
+# (`cli.training_scaler --cache-dir data/trial19_reference_100hz --out
+# data/trial19_training_scaler_100hz.npz`) and phoneme labels built against
+# that cache (`cli.build_phoneme_labels --cache-dir ... --out-dir ...`).
+#
+# Walltime: trial 10's 50 Hz build ran well inside 2 h; the resample is the
+# same work. A killed build resumes: recordings already written are reused.
+#
+# ⚠️ Submit from the repo root. `-o logs/` is resolved against where qsub ran.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+export PYTHONUNBUFFERED=1
+# uv on a compute node must never try the network: offline, it fails at once.
+export UV_OFFLINE=1
+
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.trial19_build.live.log"
+echo "live log: $LIVE_LOG"
+
+{
+    n_recordings=$(ls data/*/derivatives/serialised/sub-0_*_meg.h5 2>/dev/null | wc -l)
+    echo "[build] $n_recordings subject-0 recordings downloaded (162 = train 156 + validation 3 + test 3)"
+    if [ "$n_recordings" -eq 0 ]; then
+        echo "[build] no recordings under data/ -- run cli.prepare on a login node" >&2
+        exit 1
+    fi
+
+    uv run --frozen python -m pnpl2026.trial19.cli.build_reference --sfreq 100 --out-dir data/trial19_reference_100hz
+} 2>&1 | tee "$LIVE_LOG"

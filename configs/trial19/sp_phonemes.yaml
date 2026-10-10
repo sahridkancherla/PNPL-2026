@@ -1,0 +1,6 @@
+# SP -- S plus the phoneme head: a classifier on every stem step against the
+# phoneme heard 150 ms earlier (cli/build_phoneme_labels.py), weight 0.5. A
+# teacher only; nothing changes at test time. Compare with S.
+run_name: trial19_sp
+
+phoneme_dir: data/trial19_phonemes

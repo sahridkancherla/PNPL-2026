@@ -1,0 +1,5 @@
+# SPW -- S plus both the phoneme head and the word tower.
+run_name: trial19_spw
+
+phoneme_dir: data/trial19_phonemes
+word_descriptions: data/word_descriptions.npz

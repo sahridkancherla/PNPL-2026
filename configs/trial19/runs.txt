@@ -1,0 +1,12 @@
+configs/trial19/s_plain.yaml 0
+configs/trial19/s_plain.yaml 1
+configs/trial19/s_plain.yaml 2
+configs/trial19/sp_phonemes.yaml 0
+configs/trial19/sp_phonemes.yaml 1
+configs/trial19/sp_phonemes.yaml 2
+configs/trial19/sw_tower.yaml 0
+configs/trial19/sw_tower.yaml 1
+configs/trial19/sw_tower.yaml 2
+configs/trial19/spw_both.yaml 0
+configs/trial19/spw_both.yaml 1
+configs/trial19/spw_both.yaml 2

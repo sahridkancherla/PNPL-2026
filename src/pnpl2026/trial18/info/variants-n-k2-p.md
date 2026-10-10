@@ -109,6 +109,16 @@ All hub-corrected on the holdout, lone rows I3's:
 A second target space helps twice over: Kn and K2 each help, and together
 most. N and P each add a little. N alone was not submitted (the user's call).
 
+On top of the 68.49 mix: + N **68.790**, + P **68.778**, + P and N together
+68.444 -- each alone helps a little, both at once does not.
+
+**N alone: 33.22** against G2's 63.41 (-30.2). The research note's main claim
+is refuted on the board: the sentence transformer's context is worth about
+30 points on the holdout's runs, more than locally (full sentences 69 -> 42).
+What failed before (word-pair fusion, L) was a prior over list-word-only
+sequences, not context itself. Yet N still added +0.3 to the mix: a weak
+member that errs differently.
+
 ### Next wave (fixed 2026-10-09): more second target spaces
 
 The only model change that has moved the mix up, twice. Configs only:
@@ -120,3 +130,34 @@ The only model change that has moved the mix up, twice. Configs only:
 | K1 | `k1_fragments_layer3.yaml` | G1's shaping (fragments 0.5, no lone words) |
 
 `runs.txt` lines 16-24; each judged by adding it to the 68.49 mix.
+
+Local (2026-10-09), seed means, beside K2:
+
+| run | FRAG test | frag val | ref test | holdout top-1 / top-10 agreement with G2 |
+|---|---|---|---|---|
+| K2 | 37.60 | 41.32 | 72.00 | 60% / 79% |
+| K6 | 32.72 | 38.33 | 68.25 | 67% / 82% |
+| K18 | 30.12 | 38.33 | 68.56 | 66% / 82% |
+| K1 | **49.90** | **48.17** | **73.16** | **49% / 72%** |
+
+K6 and K18 sit closer to G2 than K2 does (less different); K1 is the most
+different K yet, like G1 (51%) -- its fragment scores are G1's (49), which
+that protocol flatters. Against the 68.79 file each mix changes the top 10
+of 39-44% of rows, all three together 56%.
+
+### Board (2026-10-10): K18 is the new best, 69.08
+
+Each added to the 68.79 mix (G1, G2, Kn, K2, N, F1, w1024), hub-corrected,
+lone rows I3's:
+
+| file | board | against 68.79 |
+|---|---|---|
+| **+ K18** (`ens_best_k18_ts_hubh_lone`) | **69.076** | **+0.29, the new best** |
+| + K6 | 68.722 | -0.07 |
+| + K1 | 68.290 | -0.50 |
+| + K6, K18 and K1 | 68.508 | -0.28 |
+
+Returns from more second heads are shrinking: Kn +1.7, K2 +1.5, K18 +0.3,
+K6 0. K1, the member that agrees least with G2 (49% top-1), LOST 0.5, so
+"different" alone is not what pays; and all three together scored below K18
+alone.

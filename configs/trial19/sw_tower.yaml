@@ -1,0 +1,6 @@
+# SW -- S plus the word tower: the brain side meets a TRAINED word side (t5
+# layers, sound shape, letters, duration -> 256; cli/build_word_descriptions.py)
+# in a shared space, scored beside the frozen t5 head. Compare with S.
+run_name: trial19_sw
+
+word_descriptions: data/word_descriptions.npz

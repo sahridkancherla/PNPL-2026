@@ -68,3 +68,11 @@ ens_g1g2kn_k2_f1w1024,in_context_ts_hubh_lone,68.488,2026-10-09,ens_g1g2kn_k2_f1
 ens_g1g2k2_f1w1024,in_context_ts_hubh_lone,67.274,2026-10-09,ens_g1g2k2_f1w1024_ts_hubh_lone.csv
 ens_g1g2kn_p_f1w1024,in_context_ts_hubh_lone,67.361,2026-10-09,ens_g1g2kn_p_f1w1024_ts_hubh_lone.csv
 trial18_all_g2_ens,in_context_ts_lone,54.793,2026-10-09,trial18_all_g2_ens_ts_lone.csv
+ens_g1g2kn_k2_p_n_f1w1024,in_context_ts_hubh_lone,68.444,2026-10-09,ens_g1g2kn_k2_p_n_f1w1024_ts_hubh_lone.csv
+ens_g1g2kn_k2_n_f1w1024,in_context_ts_hubh_lone,68.790,2026-10-09,ens_g1g2kn_k2_n_f1w1024_ts_hubh_lone.csv
+ens_g1g2kn_k2_p_f1w1024,in_context_ts_hubh_lone,68.778,2026-10-09,ens_g1g2kn_k2_p_f1w1024_ts_hubh_lone.csv
+trial18_n_ens,in_context_ts_lone,33.215,2026-10-09,trial18_n_ens_ts_lone.csv
+ens_best_k18,in_context_ts_hubh_lone,69.076,2026-10-10,ens_best_k18_ts_hubh_lone.csv
+ens_best_k6,in_context_ts_hubh_lone,68.722,2026-10-10,ens_best_k6_ts_hubh_lone.csv
+ens_best_k1,in_context_ts_hubh_lone,68.290,2026-10-10,ens_best_k1_ts_hubh_lone.csv
+ens_best_k6k18k1,in_context_ts_hubh_lone,68.508,2026-10-10,ens_best_k6k18k1_ts_hubh_lone.csv
