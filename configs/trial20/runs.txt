@@ -1,0 +1,12 @@
+configs/trial20/h_word_transformer.yaml 0
+configs/trial20/h_word_transformer.yaml 1
+configs/trial20/h_word_transformer.yaml 2
+configs/trial20/r_readout.yaml 0
+configs/trial20/r_readout.yaml 1
+configs/trial20/r_readout.yaml 2
+configs/trial20/m_time_mask.yaml 0
+configs/trial20/m_time_mask.yaml 1
+configs/trial20/m_time_mask.yaml 2
+configs/trial20/spw_more.yaml 3
+configs/trial20/spw_more.yaml 4
+configs/trial20/spw_more.yaml 5

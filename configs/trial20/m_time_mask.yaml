@@ -1,0 +1,5 @@
+# M -- SPW with time masking: half the training items get 1-2 stretches of
+# 0.1-0.3 s blanked (Feghhi 2025; Brain2Qwerty v2). Training only.
+run_name: trial20_m
+
+time_mask_p: 0.5

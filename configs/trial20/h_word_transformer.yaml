@@ -1,0 +1,7 @@
+# H -- SPW plus a word transformer after the readout: two blocks over each
+# item's word vectors, rotary over word order -- the stage G2 has, so words
+# meet as vectors as well as through time steps (the 11 Oct note's change 1).
+run_name: trial20_h
+
+model_kwargs:
+  word_depth: 2

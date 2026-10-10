@@ -1,0 +1,6 @@
+# R -- SPW with the readout reaching 2.5 s after each onset instead of 1.5 s,
+# as far as the item goes. Only words with 2.5 s of item after them gain.
+run_name: trial20_r
+
+model_kwargs:
+  readout_after_s: 2.5
