@@ -83,6 +83,10 @@ def phoneme_symbol(label, mapping):
     """
     #stress digits carry no identity here: "ah0" and "ah1" are one sound
     text = re.sub(r"\d", "", str(label).strip().lower())
+
+    #LibriBrain tags each phoneme's place in its word ("b_B", "uh_I", "k_E"):
+    #the sound is the part before the tag
+    text = re.sub(r"_[a-z]+$", "", text)
     if not text or text == "nan":
         return None
     symbol = mapping.get(text, text.upper())
