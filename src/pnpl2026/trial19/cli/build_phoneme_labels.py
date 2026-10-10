@@ -125,6 +125,12 @@ def main():
     if not written:
         raise SystemExit("[phonemes] nothing written: is the data root right?")
 
+    #⚠️ speech fills most of a recording; almost nothing covered means the
+    #phoneme rows' timing columns were not read
+    if np.mean(shares) < 0.05:
+        raise SystemExit(f"[phonemes] phonemes cover only {100 * np.mean(shares):.1f}% of samples: "
+                         f"check the phoneme rows' {EVENTS_ONSET_COLUMN} and {EVENTS_DURATION_COLUMN} columns.")
+
 
 if __name__ == "__main__":
     main()
