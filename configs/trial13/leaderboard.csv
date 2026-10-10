@@ -76,3 +76,9 @@ ens_best_k18,in_context_ts_hubh_lone,69.076,2026-10-10,ens_best_k18_ts_hubh_lone
 ens_best_k6,in_context_ts_hubh_lone,68.722,2026-10-10,ens_best_k6_ts_hubh_lone.csv
 ens_best_k1,in_context_ts_hubh_lone,68.290,2026-10-10,ens_best_k1_ts_hubh_lone.csv
 ens_best_k6k18k1,in_context_ts_hubh_lone,68.508,2026-10-10,ens_best_k6k18k1_ts_hubh_lone.csv
+ens_k18_sw,in_context_ts_hubh_lone,69.508,2026-10-10,ens_k18_sw_ts_hubh_lone.csv
+ens_k18_t19all,in_context_ts_hubh_lone,68.790,2026-10-10,ens_k18_t19all_ts_hubh_lone.csv
+ens_k18_s,in_context_ts_hubh_lone,69.040,2026-10-10,ens_k18_s_ts_hubh_lone.csv
+ens_k18_sp,in_context_ts_hubh_lone,68.722,2026-10-10,ens_k18_sp_ts_hubh_lone.csv
+ens_k18_spw,in_context_ts_hubh_lone,69.758,2026-10-10,ens_k18_spw_ts_hubh_lone.csv
+trial19_all_ens,in_context_ts_lone,60.185,2026-10-10,trial19_all_ens_ts_lone.csv

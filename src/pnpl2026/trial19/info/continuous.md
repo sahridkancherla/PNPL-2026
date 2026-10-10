@@ -148,4 +148,41 @@ but expected on RDS). Predict as trial 18, with trial 19's `cli.predict`
 
 ## Results
 
-Pending: wave 1 (S, SP, SW, SPW), local then the board.
+### Wave 1, local (2026-10-10), seed means; G2 and K2 for comparison
+
+| run | frag val | FRAG test | ref test | ALONE test | train |
+|---|---|---|---|---|---|
+| G2 (trial 13) | 38.44 | 31.80 | 69.32 | ~29 | -- |
+| K2 (trial 18) | 41.32 | 37.60 | 72.00 | 32.33 | 75.55 |
+| **S** | 49.96 | 38.17 | 60.43 | 33.96 | 73.40 |
+| **SP** | 49.65 | 42.43 | 59.62 | 35.77 | 73.99 |
+| **SW** | 52.75 | **49.52** | **65.36** | **38.96** | 72.04 |
+| **SPW** | **53.23** | 40.96 | 63.03 | 38.34 | 72.49 |
+
+- every variant leads G2 on the holdout-shaped columns (fragments +11 to +15
+  on validation, lone words +5 to +10) and trails it on full sentences with
+  3 s windows (60-65 against 69) -- the shape it trained on is the
+  holdout's, not the reference protocol's
+- the word tower is the strongest addition locally (SW: FRAG test 49.5,
+  ALONE 39.0); the phoneme head adds ~4 on FRAG test alone (SP vs S), but
+  not on top of the tower (SPW vs SW)
+- local columns have never ranked recipes like the board: the mix decides
+
+### Board (2026-10-10): SPW lifts the best mix to 69.76
+
+Each added to the 69.08 mix (G1, G2, Kn, K2, N, F1, w1024, K18),
+hub-corrected, lone rows I3's:
+
+| file | board | against 69.08 |
+|---|---|---|
+| **+ SPW** (`ens_k18_spw_ts_hubh_lone`) | **69.758** | **+0.68, the new best** |
+| + SW | 69.508 | +0.43 |
+| + S | 69.040 | -0.04 |
+| + all four | 68.790 | -0.29 |
+| + SP | 68.722 | -0.35 |
+| the family alone (`trial19_all_ens_ts_lone`) | 60.185 | G2 alone 63.41 |
+
+The word tower is what helps the mix: both variants with it gained, both
+without it did not. The family alone is 3.2 below G2 -- a different voter,
+as Kn (56.0) and N (33.2) were. Twelve of its models at once was too much
+weight.
