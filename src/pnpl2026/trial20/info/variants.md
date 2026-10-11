@@ -100,4 +100,79 @@ Predict every run with trial 20's `cli.predict`.
 
 ## Results
 
-Pending: the calibration, the wave, and the family-weighted mixes.
+### Calibration (2026-10-11): no local subset passes; non-Sherlock tracks the board better
+
+83 board rows -> 69 points, 60 with every member's test dumps:
+
+| protocol | subset | Spearman | pairs ordered as the board |
+|---|---|---|---|
+| reference | all | +0.12 | 52% |
+| reference | Sherlock1 | **+0.02** | **50%** (a coin flip) |
+| reference | TheMoth | +0.28 | 60% |
+| reference | MOCHATIMIT | **+0.45** | **66%** |
+| fragment | all | **+0.49** | **69%** |
+| fragment | Sherlock1 | +0.44 | 65% |
+| fragment | TheMoth | +0.45 | 66% |
+
+None reaches the 80% bar, so the board stays the only judge. The note's
+hypothesis holds in direction: full-sentence Sherlock scores carry no
+information about the board, MOCHA-TIMIT (short isolated sentences) carries
+the most of the reference subsets, and the holdout-shaped fragment protocol
+does best overall. Use: a tie-breaker between files the board cannot
+separate, never a ranking on its own.
+
+### Board (2026-10-11): family weights and more trial 19 members both lost
+
+Against the 69.76 flat mix (G1, G2, Kn, K2, N, F1, w1024, K18, SPW):
+
+| file | board | against 69.76 |
+|---|---|---|
+| families at equal weight (`ens_fam_equal`) | 69.222 | -0.54 |
+| SPW's family at 0.5x (`ens_fam_spw05`) | 69.222 | -0.54 |
+| SPW's family at 2x (`ens_fam_spw2`) | 68.790 | -0.97 |
+| + SW beside SPW (`ens_k18_sw_spw`) | 69.058 | -0.70 |
+| + S and SW beside SPW (`ens_k18_s_sw_spw`) | 68.540 | -1.22 |
+
+One vote per file stays best. The continuous family helps at about 3 of 23
+votes; every file that raised its share lost (2x, +SW, +S+SW). Wave rule
+consequence: test each new variant IN PLACE OF SPW, not beside it.
+
+### The wave, local (2026-10-11): all twelve trained; nothing ranks them
+
+Seed means, BAcc@10: FRAG test / frag val / ref test / ALONE test / train.
+
+| run | FRAG test | frag val | ref test | alone test | train |
+|---|---|---|---|---|---|
+| H | 41.4 +/- 8.4 | 47.5 | 64.0 | 35.7 | 78.2 |
+| R | 44.0 +/- 3.6 | 51.8 | 64.2 | 36.9 | 72.1 |
+| M | 44.7 +/- 1.4 | 48.8 | 61.7 | 35.7 | 67.3 |
+| SPW+ (s3-5) | 41.7 +/- 3.8 | 53.7 | 63.3 | 38.8 | 72.4 |
+
+H s2 is the outlier: FRAG test 31.8 (s0 48.6) with a normal frag val (47.6)
+and the highest train score (82.8); H fits the training set hardest. M
+trains lowest (67.3), as masking should. Screen: every group healthy, seeds
+agreeing 62-73% on the holdout; top-1 agreement with the reference H 48%,
+M 49%, SPW 45%, R 44%. Check 2 against the 69.76 file: top-10 overlap 95.1%
+(swap H), 96.3% (R), 96.1% (M), 97.8% (SPW6).
+
+Submitted as swaps (each variant takes SPW's three votes) and SPW6 (six SPW
+seeds sharing three votes), per the board result above.
+
+### Board (2026-10-11): the wave lost; 69.76 stands
+
+| file | board | against 69.76 |
+|---|---|---|
+| six SPW seeds as three votes (`ens_spw6`) | 69.222 | -0.54 |
+| M in place of SPW (`ens_swap_m`) | 69.008 | -0.75 |
+| R in place of SPW (`ens_swap_r`) | 68.722 | -1.04 |
+| H in place of SPW (`ens_swap_h`) | 68.540 | -1.22 |
+
+None of H, R or M beats plain SPW in its place, and the word transformer
+(H) loses most -- the time transformer already does the word mixing.
+SPW6 is the same recipe as the 69.76 file with three more seeds, and it
+scores 0.54 lower: part of 69.76 is those three seeds, which the private
+board will not necessarily reward. Final picks should therefore include
+files that do not depend on one set of three seeds.
+
+Nine submissions since the 69.76 file, all 68.5-69.2: the mix of these
+families is at a plateau. Trial 20 is closed.

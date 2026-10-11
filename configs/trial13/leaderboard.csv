@@ -82,3 +82,12 @@ ens_k18_s,in_context_ts_hubh_lone,69.040,2026-10-10,ens_k18_s_ts_hubh_lone.csv
 ens_k18_sp,in_context_ts_hubh_lone,68.722,2026-10-10,ens_k18_sp_ts_hubh_lone.csv
 ens_k18_spw,in_context_ts_hubh_lone,69.758,2026-10-10,ens_k18_spw_ts_hubh_lone.csv
 trial19_all_ens,in_context_ts_lone,60.185,2026-10-10,trial19_all_ens_ts_lone.csv
+ens_k18_sw_spw,in_context_ts_hubh_lone,69.058,2026-10-11,ens_k18_sw_spw_ts_hubh_lone.csv
+ens_k18_s_sw_spw,in_context_ts_hubh_lone,68.540,2026-10-11,ens_k18_s_sw_spw_ts_hubh_lone.csv
+ens_fam_equal,in_context_ts_hubh_lone,69.222,2026-10-11,ens_fam_equal_ts_hubh_lone.csv
+ens_fam_spw2,in_context_ts_hubh_lone,68.790,2026-10-11,ens_fam_spw2_ts_hubh_lone.csv
+ens_fam_spw05,in_context_ts_hubh_lone,69.222,2026-10-11,ens_fam_spw05_ts_hubh_lone.csv
+ens_swap_h,in_context_ts_hubh_lone,68.540,2026-10-11,ens_swap_h_ts_hubh_lone.csv
+ens_spw6,in_context_ts_hubh_lone,69.222,2026-10-11,ens_spw6_ts_hubh_lone.csv
+ens_swap_m,in_context_ts_hubh_lone,69.008,2026-10-11,ens_swap_m_ts_hubh_lone.csv
+ens_swap_r,in_context_ts_hubh_lone,68.722,2026-10-11,ens_swap_r_ts_hubh_lone.csv
