@@ -1,0 +1,233 @@
+"""The pieces of the per-word encoder the continuous family reuses.
+
+    AttentionPool       the readout's pooling over the steps around an onset
+                        (trial 19's use), and the per-word family's pooling
+    MaskedBatchNorm1d   BatchNorm whose batch statistics ignore padding
+    ConvSequence        brainmagick's dilated conv stack as clip_conv sets it:
+                        10 layers, kernel 3, dilations 1,2,4,8,16 twice,
+                        BatchNorm, GELU, residual, a GLU every second layer
+
+Trial 21's hybrid stem (`continuous.py`, `stem: dascoli`) runs `ConvSequence`
+over a whole item instead of the MEGState branches, so the continuous family
+gets the encoder every member of the 69.76 mix was built on, and can start
+from a trained G2's weights key for key. The classes are trial 18's,
+unchanged, so those weights load without renaming anything inside them.
+
+⚠️ Items are zero-padded past `lengths`. The padding is re-zeroed after every
+layer, so what leaks into the real samples through a dilated kernel is always
+zeros, as at the edge of any recording.
+"""
+
+from __future__ import annotations
+
+import torch
+import torch.nn as nn
+
+
+class MaskedBatchNorm1d(nn.BatchNorm1d):
+    """BatchNorm1d whose batch statistics ignore padded samples.
+
+    In eval mode it is exactly `nn.BatchNorm1d`: the running statistics, read
+    per channel, do not depend on padding. In training mode, given `valid`,
+    the mean and variance come from real samples only, and the running
+    statistics are updated from those -- unbiased variance, as PyTorch does.
+    """
+
+    def forward(self, x, valid=None):
+        """
+        ARGS:
+            x (torch.Tensor): [batch, channels, n_times]
+            valid (torch.Tensor or None): [batch, 1, n_times], 1 on real
+                samples and 0 on padding; None means every sample is real
+
+        RETURNS:
+            same shape as x
+        """
+        #nothing padded, or running statistics in use: plain BatchNorm
+        if valid is None or not self.training:
+            return super().forward(x)
+
+        #float32 for the statistics, whatever the autocast; dims 0 and 2 are
+        #batch and time, the axes BatchNorm averages over
+        values = x.float()
+        weights = valid.float()
+        count = weights.sum(dim=(0, 2)).clamp_min(2.0)
+        mean = (values * weights).sum(dim=(0, 2)) / count
+        variance = (((values - mean.view(1, -1, 1)) ** 2) * weights).sum(dim=(0, 2)) / count
+
+        #running statistics as nn.BatchNorm1d keeps them: momentum None is a
+        #cumulative average, which is what re-estimating them on new data wants
+        if self.track_running_stats:
+            with torch.no_grad():
+                self.num_batches_tracked += 1
+                factor = 1.0 / float(self.num_batches_tracked) if self.momentum is None else self.momentum
+                unbiased = variance * count / (count - 1.0)
+                self.running_mean.mul_(1 - factor).add_(mean.to(self.running_mean.dtype), alpha=factor)
+                self.running_var.mul_(1 - factor).add_(unbiased.to(self.running_var.dtype), alpha=factor)
+
+        #normalise with the batch statistics, then the learned scale and shift
+        out = (values - mean.view(1, -1, 1)) / torch.sqrt(variance.view(1, -1, 1) + self.eps)
+        if self.affine:
+            out = out * self.weight.view(1, -1, 1) + self.bias.view(1, -1, 1)
+        return out.to(x.dtype)
+
+
+class ConvSequence(nn.Module):
+    """brainmagick's `ConvSequence`, restricted to what clip_conv sets.
+
+    Layer k is conv -> masked BatchNorm -> GELU, plus its input when the
+    shapes match; after every `glu`-th layer a gated 1D conv of width
+    1 + 2 * glu_context. The dilation doubles each layer and resets to 1
+    every `dilation_period` layers.
+
+    Each layer stays an `nn.Sequential` so the state-dict keys are trial
+    10's; `forward` walks it by hand to hand the mask to the BatchNorm.
+
+    ATTRS:
+        layers (nn.ModuleList): conv, norm, activation per layer
+        glus (nn.ModuleList): a gated conv, or None, per layer
+        skip (bool): residual connection where the shapes allow it
+        dilations (list): the dilation of each layer
+    """
+
+    def __init__(
+        self,
+        channels,
+        kernel_size=3,
+        dilation_growth=2,
+        dilation_period=5,
+        batch_norm=True,
+        skip=True,
+        glu=2,
+        glu_context=1,
+    ):
+        """
+        ARGS:
+            channels (list): widths, input first; len - 1 layers
+            kernel_size (int): odd, so padding keeps the length
+            dilation_growth (int): multiplier per layer
+            dilation_period (int or None): reset the dilation every this many
+            batch_norm (bool): BatchNorm1d after each conv
+            skip (bool): add the input back where the widths match
+            glu (int): a gated conv after every glu-th layer; 0 for none
+            glu_context (int): its half-width
+        """
+        super().__init__()
+
+        #even kernels with dilation do not keep the length centred
+        if kernel_size % 2 != 1:
+            raise ValueError(f"kernel_size must be odd, got {kernel_size}")
+
+        self.skip = skip
+        self.layers = nn.ModuleList()
+        self.glus = nn.ModuleList()
+        self.dilations = []
+
+        dilation = 1
+        for layer, (width_in, width_out) in enumerate(zip(channels[:-1], channels[1:])):
+            #brainmagick resets BEFORE building layer k when k % period == 0
+            if dilation_period and layer % dilation_period == 0:
+                dilation = 1
+            self.dilations.append(dilation)
+
+            #"same" padding, so every layer keeps the window's length
+            modules = [
+                nn.Conv1d(
+                    width_in,
+                    width_out,
+                    kernel_size,
+                    padding=kernel_size // 2 * dilation,
+                    dilation=dilation,
+                )
+            ]
+            if batch_norm:
+                modules.append(MaskedBatchNorm1d(width_out))
+            modules.append(nn.GELU())
+            self.layers.append(nn.Sequential(*modules))
+            dilation *= dilation_growth
+
+            #a gated conv after layers glu-1, 2*glu-1, ...: doubles, then halves
+            if glu and (layer + 1) % glu == 0:
+                self.glus.append(
+                    nn.Sequential(
+                        nn.Conv1d(width_out, 2 * width_out, 1 + 2 * glu_context, padding=glu_context),
+                        nn.GLU(dim=1),
+                    )
+                )
+            else:
+                self.glus.append(None)
+
+    @property
+    def reach(self):
+        """Samples either side of a sample that the stack can read."""
+        #each layer adds (kernel - 1) / 2 * dilation on each side
+        kernel = self.layers[0][0].kernel_size[0]
+        return sum((kernel - 1) // 2 * dilation for dilation in self.dilations)
+
+    def forward(self, x, valid=None):
+        """
+        ARGS:
+            x (torch.Tensor): [batch, channels[0], n_times]
+            valid (torch.Tensor or None): [batch, 1, n_times], 1 on real
+                samples and 0 on padding
+
+        RETURNS:
+            [batch, channels[-1], n_times]
+        """
+        #the mask must describe these very samples, or BatchNorm averages the
+        #wrong ones without a word
+        if valid is not None:
+            assert valid.shape == (x.shape[0], 1, x.shape[2]), f"mask {tuple(valid.shape)} for input {tuple(x.shape)}"
+
+        for layer, glu in zip(self.layers, self.glus):
+            #conv, BatchNorm (given the mask), activation, in order
+            out = x
+            for module in layer:
+                out = module(out, valid) if isinstance(module, MaskedBatchNorm1d) else module(out)
+
+            #the residual only where the widths match, as brainmagick's
+            if self.skip and out.shape == x.shape:
+                out = out + x
+            if glu is not None:
+                out = glu(out)
+
+            #padding back to zero, so the next kernel reads zeros there
+            x = out if valid is None else out * valid
+        return x
+
+
+class AttentionPool(nn.Module):
+    """Collapse time by a learned weighting over the real samples.
+
+    Single-head: one score per sample, softmaxed over the window.
+
+    ATTRS:
+        score (nn.Linear): D -> 1, no bias -- a constant cancels in the softmax
+    """
+
+    def __init__(self, n_features):
+        """
+        ARGS:
+            n_features (int): D
+        """
+        super().__init__()
+        self.score = nn.Linear(n_features, 1, bias=False)
+
+    def forward(self, x, valid=None):
+        """
+        ARGS:
+            x (torch.Tensor): [batch, n_times, n_features]
+            valid (torch.Tensor or None): [batch, n_times] bool
+
+        RETURNS:
+            [batch, n_features]
+        """
+        scores = self.score(x)
+
+        #-inf is zero weight after the softmax; every window has real samples
+        if valid is not None:
+            scores = scores.masked_fill(~valid.unsqueeze(2), float("-inf"))
+
+        #dim=1 is TIME: the weights sum to one across the window
+        weights = scores.softmax(dim=1)
+        return (x * weights).sum(dim=1)

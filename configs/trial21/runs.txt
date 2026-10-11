@@ -1,0 +1,6 @@
+configs/trial21/b_hybrid.yaml 0
+configs/trial21/b_hybrid.yaml 1
+configs/trial21/b_hybrid.yaml 2
+configs/trial21/b_cold.yaml 0
+configs/trial21/b_cold.yaml 1
+configs/trial21/b_cold.yaml 2

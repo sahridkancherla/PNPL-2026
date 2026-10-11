@@ -1,0 +1,93 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=64gb:ngpus=1:gpu_type=RTX6000
+#PBS -l walltime=02:00:00
+#PBS -N pnpl-trial21-distil
+#PBS -j oe
+#PBS -o logs/
+
+# Trial 21, part A: transductive self-distillation. One student per line of
+# configs/trial21/distil.txt ("<checkpoint> <run name>"); the teacher is the
+# best submitted file. Each task fine-tunes its student on its own training
+# items plus the holdout's epochs (cli.distil), then predicts it (cli.predict)
+# so the CSV is ready for the mix. From the repo root:
+#
+#     qsub -J 1-12 pbs/trial21_distil.pbs           the first wave: G2, K2, K18, SPW x 3 seeds
+#     qsub -v RUN=<n> pbs/trial21_distil.pbs        one line again
+#     qsub -v RUN=<n>,TEACHER=submissions/<f>.csv pbs/trial21_distil.pbs   another teacher (round A3)
+#
+# Settings fixed in advance (info/holdout-adaptation.md): 600 steps, lr 3e-5,
+# KL weight 0.5, 16 holdout items per step, BatchNorm re-estimated on the
+# holdout at the end. Change them here, not per student, so the wave stays
+# one experiment. DISTIL_ARGS adds to or overrides them: qsub -v
+# DISTIL_ARGS="--kl-weight 1.0" ...
+#
+# ⚠️ RTX6000: fp16 autocast (--amp); Turing has no bf16.
+# ⚠️ Nothing below downloads. Needs on RDS: data/trial10_reference/, the
+# t5 tables, data/trial19_phonemes and data/word_descriptions.npz (for an
+# SPW student), data/holdout/, the training scaler
+# (cli.training_scaler -> data/trial21_training_scaler.npz), the student
+# checkpoints and the teacher file. The preflight names whatever is missing.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+export PYTHONUNBUFFERED=1
+export UV_OFFLINE=1
+
+INDEX="${PBS_ARRAY_INDEX:-${RUN:-}}"
+if [ -z "$INDEX" ]; then
+    echo "no student chosen: submit with -J <range>, or -v RUN=<line of distil.txt>" >&2
+    exit 1
+fi
+
+# Comment lines do not count: the n-th student is the n-th non-comment line.
+read -r STUDENT RUN_NAME <<< "$(grep -v '^#' configs/trial21/distil.txt | sed -n "${INDEX}p")"
+if [ -z "${STUDENT:-}" ] || [ -z "${RUN_NAME:-}" ]; then
+    echo "student ${INDEX} of configs/trial21/distil.txt is not '<checkpoint> <run name>'" >&2
+    exit 1
+fi
+TEACHER="${TEACHER:-submissions/ens_k18_spw_ts_hubh_lone.csv}"
+SCALER="data/trial21_training_scaler.npz"
+STEPS="${STEPS:-600}"
+
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.${RUN_NAME}.live.log"
+echo "student ${INDEX}: ${STUDENT} -> ${RUN_NAME}, teacher ${TEACHER} -> live log: $LIVE_LOG"
+
+{
+    # The inputs, checked before the GPU is touched.
+    for needed in "$STUDENT" "$TEACHER" "$SCALER" data/holdout/COMPETITION_HOLDOUT/subj00_holdout01_sentence.npz \
+                  data/trial10_reference/manifest.json data/word_embeddings_t5_all.npz; do
+        if [ ! -e "$needed" ]; then
+            echo "[preflight] not on RDS: $needed" >&2
+            exit 1
+        fi
+    done
+    uv run --frozen python - <<'PYTHON'
+import torch
+n_gpus = torch.cuda.device_count()
+if n_gpus != 1:
+    raise SystemExit(f"[preflight] torch sees {n_gpus} GPUs; this job asked for 1.")
+print(f"[preflight] {torch.cuda.get_device_name(0)} | torch {torch.__version__}")
+PYTHON
+
+    # The training loader reads word windows at random: stage the cache locally.
+    STAGED_CACHE="${TMPDIR:?not set -- submit with qsub}/trial10_reference"
+    echo "[stage] data/trial10_reference ($(du -sh data/trial10_reference | cut -f1)) -> $STAGED_CACHE"
+    SECONDS=0
+    cp -r data/trial10_reference "$STAGED_CACHE"
+    echo "[stage] copied in ${SECONDS}s"
+
+    # shellcheck disable=SC2086
+    uv run --frozen python -m pnpl2026.trial21.cli.distil \
+        --ckpt "$STUDENT" --teacher "$TEACHER" --run-name "$RUN_NAME" \
+        --steps "$STEPS" --lr 3.0e-5 --kl-weight 0.5 --holdout-items 16 --final-bn holdout \
+        --cache-dir "$STAGED_CACHE" --num-workers 8 --amp \
+        --holdout-dir data/holdout --scaler-file "$SCALER" ${DISTIL_ARGS:-}
+
+    # The student's submission, plain: onset shifts and the hub correction
+    # are applied to the mix afterwards, as for every other member.
+    uv run --frozen python -m pnpl2026.trial21.cli.predict \
+        --ckpt "runs/${RUN_NAME}/best.ckpt" --holdout-dir data/holdout --scaler-file "$SCALER"
+} 2>&1 | tee "$LIVE_LOG"

@@ -1,0 +1,10 @@
+# B-cold -- the hybrid trained from scratch: the same network as B without
+# the warm start, so the pair says what G2's weights are worth as a start.
+# Second wave; B first.
+run_name: trial21_bcold
+
+marker_drop_mode: random
+marker_drop_p: 0.3
+
+model_kwargs:
+  stem: dascoli

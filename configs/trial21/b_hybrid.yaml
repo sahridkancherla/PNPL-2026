@@ -1,0 +1,14 @@
+# B -- the hybrid: the continuous family (SPW's data recipe, tower and
+# phoneme head, time transformer, onset readout) with the per-word family's
+# encoder as its stem, started from trial 13's G2 of the same seed. Random
+# marker dropout instead of the list-word rule. Judged alone against G2
+# (63.41) and added to the best mix.
+run_name: trial21_b
+
+init_encoder_from: runs/trial13_g2_s{seed}/best.ckpt
+init_head: true
+marker_drop_mode: random
+marker_drop_p: 0.3
+
+model_kwargs:
+  stem: dascoli

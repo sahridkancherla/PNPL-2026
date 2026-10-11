@@ -1,0 +1,15 @@
+# Part A, one student per line: <student checkpoint> <run name>. The teacher
+# and every other setting come from pbs/trial21_distil.pbs. Lines 1-12 are
+# the first wave: G2, K2, K18 (per-word) and SPW (continuous), 3 seeds each.
+runs/trial13_g2_s0/best.ckpt trial21_d_g2_s0
+runs/trial13_g2_s1/best.ckpt trial21_d_g2_s1
+runs/trial13_g2_s2/best.ckpt trial21_d_g2_s2
+runs/trial18_k2_s0/best.ckpt trial21_d_k2_s0
+runs/trial18_k2_s1/best.ckpt trial21_d_k2_s1
+runs/trial18_k2_s2/best.ckpt trial21_d_k2_s2
+runs/trial18_k18_s0/best.ckpt trial21_d_k18_s0
+runs/trial18_k18_s1/best.ckpt trial21_d_k18_s1
+runs/trial18_k18_s2/best.ckpt trial21_d_k18_s2
+runs/trial19_spw_s0/best.ckpt trial21_d_spw_s0
+runs/trial19_spw_s1/best.ckpt trial21_d_spw_s1
+runs/trial19_spw_s2/best.ckpt trial21_d_spw_s2
