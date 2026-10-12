@@ -96,4 +96,28 @@ winner. Private board only.
 
 ## Results
 
-Pending.
+### Local (2026-10-12)
+
+**Alignment (route 2):** 39 subjects, 154 sentences. Held-out correlation of
+the others' mapped average with subject 0's MEG: C = 5 0.151, 10 0.147, 20
+0.132, 30 0.114, 40 0.092, 60 0.018, 80 0.069; the raw average, unmapped,
+0.089. Chosen C = 5; shared eigenvalues 20.4, 10.8, 5.2, 4.9, 4.7 (one
+subject's worth = 1). Per-subject weights 0.053-0.096. Caution: five
+components are mostly broad evoked responses; how much word identity they
+carry only the members' predictions on the virtual holdout can say, so a
+C = 30 version (`mcca30`) is built beside it.
+
+**Transduction v1:** rows sharing a top-1 word are far closer than other
+cross-sentence pairs (cosine 0.605 vs 0.141): the clusters exist. Pull 1:
+seeds agree more in 5 of 7 families (G2 72.1 -> 73.4, K18 +1.1, SPW +0.9;
+Kn -1.5), local check +0.62 +/- 1.71 (wins 60%), top-10 overlap with the
+plain mix 82.0%. Pull 2: local -0.74 (wins 25%), overlap 85.4%. The
+estimated shares FAIL the doc's plausibility check: the highest are new,
+really, always, people (7.9-10.5%) and function words sit at the floor --
+the shares measure hub bias, not frequency.
+
+**Correction variants (200 uneven non-Sherlock draws, against the
+z-score's 69.15):** every variant loses -- balance_half -0.94, hubw -0.05
+(wins 46%), emsk -3.32, hubpos -1.30, quota -3.21, qbnorm -2.50. The EM
+shares are implausible (always 31.7%, can 12.9%). By the fixed rule the
+whole family is dropped before submission; `hubb` with it.

@@ -13,6 +13,7 @@
 #
 #     qsub pbs/trial22_align.pbs                         all 39 subjects, name "mcca"
 #     qsub -v SUBJECTS=1-12,NAME=mcca12 pbs/trial22_align.pbs
+#     qsub -v COMPONENTS=30,NAME=mcca30 pbs/trial22_align.pbs   a fixed component count
 #
 # ⚠️ Needs on RDS: data/holdout/ with all 40 subjects' files (downloaded on a
 # login node) and data/trial22_matches.json (cli.repeat_check --local).
@@ -28,6 +29,7 @@ export OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 OPENBLAS_NUM_THREADS=8
 
 SUBJECTS="${SUBJECTS:-1-39}"
 NAME="${NAME:-mcca}"
+COMPONENTS="${COMPONENTS:-auto}"
 LIVE_LOG="logs/${PBS_JOBID%%.*}.align_${NAME}.live.log"
 echo "align: subjects ${SUBJECTS} -> data/trial22_virtual/${NAME}; live log: $LIVE_LOG"
 
@@ -39,5 +41,5 @@ echo "align: subjects ${SUBJECTS} -> data/trial22_virtual/${NAME}; live log: $LI
         fi
     done
     uv run --frozen python -m pnpl2026.trial22.cli.align --holdout-dir data/holdout \
-        --subjects "$SUBJECTS" --mode mcca --name "$NAME"
+        --subjects "$SUBJECTS" --mode mcca --components "$COMPONENTS" --name "$NAME"
 } 2>&1 | tee "$LIVE_LOG"
