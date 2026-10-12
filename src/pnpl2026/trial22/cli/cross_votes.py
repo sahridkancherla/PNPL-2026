@@ -56,6 +56,12 @@ def parse_args():
     parser.add_argument("--matches", default="data/trial22_matches.json", help="route 1: repo-relative match table")
     parser.add_argument("--weight", type=float, required=True, help="the votes' weight against the base's 1")
     parser.add_argument("--min-subject-weight", type=float, default=0.0, help="route 1: drop subjects agreeing less")
+    parser.add_argument(
+        "--weighting",
+        choices=("agreement", "specific"),
+        default="agreement",
+        help="route 1: weigh subjects by raw row agreement (the submitted files) or by row-specific agreement",
+    )
     parser.add_argument("--out", required=True)
     parser.add_argument("--holdout-dir", default=None, help="folder holding COMPETITION_HOLDOUT/")
     parser.add_argument("--force", action="store_true")
@@ -103,6 +109,33 @@ def top10_overlap(first, second):
     top_first = np.argpartition(-first, 9, axis=1)[:, :10]
     top_second = np.argpartition(-second, 9, axis=1)[:, :10]
     return float(np.mean([len(set(a) & set(b)) / 10 for a, b in zip(top_first, top_second)]))
+
+
+def row_signal(base, votes, seed=0):
+    """Agreement on each row's own part: every word's mean over rows removed, matched rows against shuffled.
+
+    Two decoders' rows correlate even on unrelated rows, because both favour
+    the same words everywhere. Only agreement beyond a shuffled pairing is
+    information about the row itself.
+
+    ARGS:
+        base, votes (np.ndarray): [N, 50] the voting rows of each
+        seed (int): the shuffle
+
+    RETURNS:
+        dict: specific_matched, specific_shuffled (mean row correlation after
+        column centring), overlap_matched, overlap_shuffled (top-10, raw)
+    """
+    #axis=0 is the row axis: each word's mean over the rows, removed
+    centred_base = base - base.mean(axis=0, keepdims=True)
+    centred_votes = votes - votes.mean(axis=0, keepdims=True)
+    order = np.random.default_rng(seed).permutation(len(base))
+    return {
+        "specific_matched": float(np.mean(row_correlation(centred_base, centred_votes))),
+        "specific_shuffled": float(np.mean(row_correlation(centred_base, centred_votes[order]))),
+        "overlap_matched": top10_overlap(base, votes),
+        "overlap_shuffled": top10_overlap(base, votes[order]),
+    }
 
 
 def read_standardised(path, words):
@@ -168,7 +201,7 @@ def virtual_votes(paths, virtual_dir, words, n_rows):
     return votes, voting, lines
 
 
-def subject_votes(paths, matches_path, holdout_dir, words, base, min_weight):
+def subject_votes(paths, matches_path, holdout_dir, words, base, min_weight, weighting="agreement"):
     """Route 1: every subject's votes mapped onto subject 0's rows, weighted by agreement.
 
     ARGS:
@@ -178,6 +211,8 @@ def subject_votes(paths, matches_path, holdout_dir, words, base, min_weight):
         words (tuple)
         base (np.ndarray): [N, 50] subject 0's standardised scores
         min_weight (float): subjects agreeing less are dropped
+        weighting (str): "agreement" (raw row correlation) or "specific"
+            (each word's mean removed first, `row_signal`)
 
     RETURNS:
         votes [N, 50], voting [N] bool, lines (list)
@@ -212,7 +247,10 @@ def subject_votes(paths, matches_path, holdout_dir, words, base, min_weight):
                 raise SystemExit(f"Subject {subject} epoch {meta['epoch']} slot {meta['word']} does not map onto subject 0.")
             table[row] = own[meta["index"]]
         present = ~np.isnan(table).any(axis=1)
-        agreements[subject] = float(np.mean(row_correlation(base[present], table[present])))
+        if weighting == "specific":
+            agreements[subject] = row_signal(base[present], table[present])["specific_matched"]
+        else:
+            agreements[subject] = float(np.mean(row_correlation(base[present], table[present])))
         mapped[subject] = table
 
     #weights by agreement with subject 0, floored at zero
@@ -224,7 +262,7 @@ def subject_votes(paths, matches_path, holdout_dir, words, base, min_weight):
     covered = np.stack([~np.isnan(mapped[subject]).any(axis=1) for subject in weights], axis=0)
     voting = covered.all(axis=0)
     votes = zscore_rows(stacked.sum(axis=0))
-    lines = [f"Route 1: {len(by_subject)} subjects, {len(paths)} files; agreement with the base (mean row "
+    lines = [f"Route 1: {len(by_subject)} subjects, {len(paths)} files; {weighting} with the base (mean row "
              "correlation) and weight:", ""]
     lines += [f"- subject {subject}: {agreements[subject]:+.3f}" + (f", weight {weights[subject] / total:.3f}" if subject in weights else ", dropped")
               for subject in sorted(agreements)]
@@ -246,7 +284,8 @@ def main():
     if args.virtual_dir:
         votes, voting, lines = virtual_votes(args.votes, args.virtual_dir, words, len(index))
     else:
-        votes, voting, lines = subject_votes(args.votes, REPO_ROOT / args.matches, args.holdout_dir, words, base, args.min_subject_weight)
+        votes, voting, lines = subject_votes(args.votes, REPO_ROOT / args.matches, args.holdout_dir, words, base,
+                                             args.min_subject_weight, args.weighting)
 
     #the combination on voting rows; every other row exactly the base
     combined = base.copy()
@@ -255,6 +294,13 @@ def main():
               f"Votes against the base on those rows: mean row correlation {np.mean(row_correlation(base[voting], votes[voting])):+.3f}, "
               f"top-10 overlap {100 * top10_overlap(base[voting], votes[voting]):.1f}%.",
               f"Result against the base: top-10 overlap {100 * top10_overlap(base[voting], combined[voting]):.1f}%."]
+
+    #the part that is information about each row: matched beyond shuffled
+    signal = row_signal(base[voting], votes[voting])
+    lines += [f"Row-specific agreement (each word's mean over rows removed): matched rows r = {signal['specific_matched']:+.3f}, "
+              f"shuffled rows r = {signal['specific_shuffled']:+.3f}; top-10 overlap matched "
+              f"{100 * signal['overlap_matched']:.1f}%, shuffled {100 * signal['overlap_shuffled']:.1f}%. "
+              "The votes carry row information only as far as matched exceeds shuffled."]
 
     #⚠️ rows that do not vote must keep their ranking exactly
     still = ~voting

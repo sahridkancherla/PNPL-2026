@@ -121,3 +121,18 @@ z-score's 69.15):** every variant loses -- balance_half -0.94, hubw -0.05
 (wins 46%), emsk -3.32, hubpos -1.30, quota -3.21, qbnorm -2.50. The EM
 shares are implausible (always 31.7%, can 12.9%). By the fixed rule the
 whole family is dropped before submission; `hubb` with it.
+
+### Board (2026-10-12): transduction wins; cross-subject votes lose
+
+| file | board | against 69.758 |
+|---|---|---|
+| transduction v1, pull 1, hub-corrected (`ens_t22_tc1`) | **70.147** | **+0.39** (new best) |
+| route 2, MCCA C = 5, w 0.15 (`ens_x2w15`) | 69.425 | -0.33 |
+| route 2, w 0.30 (`ens_x2w30`) | 69.358 | -0.40 |
+| route 1, all-data G2 on 12 subjects, w 0.15 (`ens_x1w15`) | 69.243 | -0.52 |
+
+Transduction is the first post-processing gain since the hub correction.
+Both cross-subject routes lose, the larger weight more: at C = 5 the other
+listeners' votes add noise faster than signal. In `ensembles.csv` a
+pseudo-member (`+transduce...`, `+cross_votes...`) marks each file's
+post-processing, so the calibration never mistakes it for the plain mix.
