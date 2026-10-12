@@ -1,0 +1,43 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=32gb
+#PBS -l walltime=02:00:00
+#PBS -N pnpl-trial22-align
+#PBS -j oe
+#PBS -o logs/
+
+# Trial 22, change 1, route 2: the virtual subject 0 (cli.align). Multiway
+# CCA over subject 0 and subjects 1-39 on the matched holdout sentences, the
+# shared-component count chosen by held-out sentences, every other subject's
+# epochs mapped into subject 0's sensor space and averaged. CPU only; every
+# subject's sentence file is read twice (~200 MB each). From the repo root:
+#
+#     qsub pbs/trial22_align.pbs                         all 39 subjects, name "mcca"
+#     qsub -v SUBJECTS=1-12,NAME=mcca12 pbs/trial22_align.pbs
+#
+# ⚠️ Needs on RDS: data/holdout/ with all 40 subjects' files (downloaded on a
+# login node) and data/trial22_matches.json (cli.repeat_check --local).
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+export PYTHONUNBUFFERED=1
+export UV_OFFLINE=1 HF_HUB_OFFLINE=1
+export OMP_NUM_THREADS=8 MKL_NUM_THREADS=8 OPENBLAS_NUM_THREADS=8
+
+SUBJECTS="${SUBJECTS:-1-39}"
+NAME="${NAME:-mcca}"
+LIVE_LOG="logs/${PBS_JOBID%%.*}.align_${NAME}.live.log"
+echo "align: subjects ${SUBJECTS} -> data/trial22_virtual/${NAME}; live log: $LIVE_LOG"
+
+{
+    for needed in data/trial22_matches.json data/holdout/COMPETITION_HOLDOUT/subj39_holdout01_sentence.npz; do
+        if [ ! -e "$needed" ]; then
+            echo "[preflight] not on RDS: $needed" >&2
+            exit 1
+        fi
+    done
+    uv run --frozen python -m pnpl2026.trial22.cli.align --holdout-dir data/holdout \
+        --subjects "$SUBJECTS" --mode mcca --name "$NAME"
+} 2>&1 | tee "$LIVE_LOG"

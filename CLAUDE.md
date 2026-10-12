@@ -28,14 +28,15 @@ outside LibriBrain does not come with LibriBrain's preprocessing
 32 broad-track subjects come preprocessed, but they recorded only Sherlock1
 ses-11/12 -- subject 0's validation and test stories.
 
-⚠️ **Holdout statistics (revised 2026-10-08).** The holdout principle of
-2026-10-07 is withdrawn: statistics computed across the holdout as a whole --
-a scaler pooled over holdout epochs, holdout-wide score correction -- may be
-used again. The organisers called unsupervised use of holdout MEG "not
-prohibited, but judged to be against the spirit of the competition", and top
-teams must hand over runnable code, so it is an accepted verification risk.
-Measured cost of avoiding it: none for G1 and G2 (identical scores); one row
-(2.000) for the 66.39 mix.
+⚠️ **Holdout use (revised 2026-10-12).** The organisers have confirmed that
+the holdout data may be used in any way before a submission is generated --
+pooled statistics, transductive inference, training on holdout MEG, and the
+other 39 subjects' holdout files (relayed 12 Oct; wording and date in
+`handoff-docs/route-to-73-2026-10-12.md`). Still off-limits under rule 4:
+reading labels off the leaderboard, looking the sentences up outside the data
+or rebuilding the stimulus list, and undoing a file's shuffle with its stored
+`shuffle_seed`. Every step that adapts on the holdout must sit inside the
+pipeline, seeded and re-runnable: top teams hand over runnable code.
 
 `T = (tmax - tmin) * sfreq`. All four numbers live in `Config`; read them from
 the config rather than hard-coding 250.

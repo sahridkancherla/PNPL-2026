@@ -1,0 +1,67 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=32gb:ngpus=1:gpu_type=RTX6000
+#PBS -l walltime=03:00:00
+#PBS -N pnpl-trial22-predict
+#PBS -j oe
+#PBS -o logs/
+
+# Trial 22, change 1: the cross-subject predictions. From the repo root:
+#
+#     qsub -v MODE=virtual,NAME=mcca pbs/trial22_predict.pbs
+#         route 2: every member of configs/trial22/members.txt on the
+#         virtual subject 0 (cli.align), fixed training scaler; CSVs in
+#         submissions/t22_virtual/<NAME>/<run>.csv
+#     qsub -v MODE=subjects pbs/trial22_predict.pbs
+#         route 1: trial 18's all-data G2 (3 seeds) on every subject that has
+#         a subject layer (the others' cache manifest), each through its own
+#         layer, its own pooled scaling; CSVs
+#         submissions/trial18_all_g2_s<seed>_subj<KK>_in_context.csv
+#
+# ⚠️ Needs on RDS: data/holdout/ (all subjects), data/trial22_training_scaler.npz
+# (trial 22's cli.training_scaler), the checkpoints; for MODE=virtual the
+# virtual holdout; for MODE=subjects data/trial18_others/manifest.json.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+export PYTHONUNBUFFERED=1
+export UV_OFFLINE=1 HF_HUB_OFFLINE=1
+
+MODE="${MODE:?submit with -v MODE=virtual or MODE=subjects}"
+NAME="${NAME:-mcca}"
+LIVE_LOG="logs/${PBS_JOBID%%.*}.predict_${MODE}_${NAME}.live.log"
+echo "predict: mode ${MODE}; live log: $LIVE_LOG"
+
+{
+    if [ "$MODE" = "virtual" ]; then
+        VIRTUAL="data/trial22_virtual/${NAME}"
+        if [ ! -e "${VIRTUAL}/matched.json" ]; then
+            echo "[preflight] no ${VIRTUAL}/matched.json: run pbs/trial22_align.pbs first" >&2
+            exit 1
+        fi
+        mkdir -p "submissions/t22_virtual/${NAME}"
+        # One member per non-comment line; a failure is reported, not fatal.
+        grep -v '^#' configs/trial22/members.txt | while read -r RUN; do
+            [ -z "$RUN" ] && continue
+            uv run --frozen python -m pnpl2026.trial22.cli.predict --ckpt "runs/${RUN}/best.ckpt" \
+                --holdout-dir "$VIRTUAL" --out "submissions/t22_virtual/${NAME}/${RUN}.csv" \
+                || echo "FAILED virtual ${RUN}"
+        done
+    elif [ "$MODE" = "subjects" ]; then
+        # The subjects the all-data model has a layer for, as the manifest lists them.
+        SUBJECTS=$(uv run --frozen python -c "import json; print(' '.join(str(s).replace('sub-', '') for s in json.load(open('data/trial18_others/manifest.json'))['subjects']))")
+        echo "subjects with a layer: ${SUBJECTS}"
+        for SEED in 0 1 2; do
+            for SUBJECT in $SUBJECTS; do
+                uv run --frozen python -m pnpl2026.trial22.cli.predict --ckpt "runs/trial18_all_g2_s${SEED}/best.ckpt" \
+                    --holdout-dir data/holdout --subject "$((10#$SUBJECT))" --subject-layer auto --scaling holdout \
+                    || echo "FAILED subject ${SUBJECT} seed ${SEED}"
+            done
+        done
+    else
+        echo "unknown MODE ${MODE}" >&2
+        exit 1
+    fi
+} 2>&1 | tee "$LIVE_LOG"

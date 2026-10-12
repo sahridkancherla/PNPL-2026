@@ -1,0 +1,30 @@
+# Trial 22: every member of the best mixes, one run name per line -- the 69.76
+# mix's 23 (G1, G2, Kn, K2, N, F1, w1024, K18, SPW) and the hybrid B. Read by
+# pbs/trial22_predict.pbs (MODE=virtual) and pbs/trial22_embed.pbs; each run's
+# checkpoint is runs/<run>/best.ckpt.
+trial13_g1_s0
+trial13_g1_s1
+trial13_g1_s2
+trial13_g2_s0
+trial13_g2_s1
+trial13_g2_s2
+trial16_kn_s0
+trial16_kn_s1
+trial16_kn_s2
+trial18_k2_s0
+trial18_k2_s1
+trial18_k2_s2
+trial18_n_s0
+trial18_n_s1
+trial18_n_s2
+trial10_f1_s0
+trial12_w1024_s0
+trial18_k18_s0
+trial18_k18_s1
+trial18_k18_s2
+trial19_spw_s0
+trial19_spw_s1
+trial19_spw_s2
+trial21_b_s0
+trial21_b_s1
+trial21_b_s2

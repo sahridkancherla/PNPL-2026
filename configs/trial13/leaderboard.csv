@@ -91,3 +91,6 @@ ens_swap_h,in_context_ts_hubh_lone,68.540,2026-10-11,ens_swap_h_ts_hubh_lone.csv
 ens_spw6,in_context_ts_hubh_lone,69.222,2026-10-11,ens_spw6_ts_hubh_lone.csv
 ens_swap_m,in_context_ts_hubh_lone,69.008,2026-10-11,ens_swap_m_ts_hubh_lone.csv
 ens_swap_r,in_context_ts_hubh_lone,68.722,2026-10-11,ens_swap_r_ts_hubh_lone.csv
+ens_a2_blend,in_context_ts_hubh_lone,66.155,2026-10-12,ens_a2_blend_ts_hubh_lone.csv
+ens_swap_b,in_context_ts_hubh_lone,69.472,2026-10-12,ens_swap_b_ts_hubh_lone.csv
+ens_k18_spw_b,in_context_ts_hubh_lone,69.758,2026-10-12,ens_k18_spw_b_ts_hubh_lone.csv

@@ -149,4 +149,77 @@ trial 20's, unchanged.
 
 ## Results
 
-Pending: A0, A2, B.
+### B, local (2026-10-11): the stem lifts full sentences; it votes unlike G2
+
+Seed means, BAcc@10: FRAG test 42.9, frag val 48.6, ref test **67.4**
+(SPW-family runs 61.7-64.2 in trial 20; G2 69-73), ALONE test 38.3, train
+66.0 (the lowest of the family: it fits least). Seeds agree 67% on the
+holdout. Against G2, top-1 agreement on the holdout is **42%, below SPW's
+45%**: the warm start from G2 did not make B a G2-like voter. Its holdout
+top-1 covers only **29 words** (SPW 41, G2 40): it concentrates on fewer
+words, which the holdout-fitted hub correction addresses in the mix but not
+in B alone. Check 2 against the 69.76 file: B added 94.9%, B in place of SPW
+94.7%, B alone 59.1%.
+
+### A0 and A2, check 2 (2026-10-11)
+
+The control (trial 21's predict, no adaptation) reproduces the 69.76 mix
+exactly (100.0%). With AdaBN on the 20 per-word members the mix moves to
+76.2% top-10 overlap, 94.7% of rows changed -- the largest move of any file;
+trial 13 measured AdaBN lowering the fragment score of G1 and G3. A2 (the
+students in their parents' place) 92.0%; A2 on the A0 base 85.2%. Every
+student ends with `--final-bn holdout`, so A2 carries part of A0's change.
+
+### A0, a label-free check (2026-10-11): AdaBN makes every family less consistent
+
+Top-10 overlap on the 868 sentence rows, plain -> AdaBN. Seeds: mean
+pairwise overlap of a family's three seeds. SPW and B: the family's seed
+mean against two models AdaBN does not touch.
+
+| family | seeds agree | vs SPW | vs B |
+|---|---|---|---|
+| G1 | 69.2 -> 67.3 | 62.1 -> 55.2 | 60.3 -> 51.0 |
+| G2 | 72.1 -> 70.2 | 64.1 -> 56.9 | 61.6 -> 51.5 |
+| Kn | 67.8 -> 61.3 | 62.3 -> 55.7 | 63.0 -> 51.2 |
+| K2 | 70.4 -> 66.1 | 65.1 -> 56.3 | 63.1 -> 51.3 |
+| N | 57.3 -> 48.1 | 39.4 -> 31.9 | 43.1 -> 32.8 |
+| K18 | 70.3 -> 69.2 | 63.4 -> 57.9 | 60.5 -> 53.0 |
+
+All 18 numbers fall. A correction for a real session shift would make the
+seeds agree more and move each family towards independent models; this
+moves every family away from both, as added noise does. With trial 13's
+local result, A0 is expected to lose; `ens_a2_bn` is dropped. The per-word
+students (G2, K2, K18) are re-run with `--final-bn blend` beside the
+`--final-bn holdout` ones (kept as `_hbn`); SPW's students are unchanged
+(the megstate stem has no BatchNorm).
+
+### A2, holdout BatchNorm against blend (2026-10-11)
+
+The per-word students' seed agreement / overlap with B (not in the teacher):
+
+| model | parent | `--final-bn holdout` | `--final-bn blend` |
+|---|---|---|---|
+| G2 | 72.1 / 61.6 | 85.3 / 57.2 | 85.4 / 59.0 |
+| K2 | 70.4 / 63.1 | 80.9 / 57.9 | 81.5 / 60.0 |
+| K18 | 70.3 / 60.5 | 83.1 / 57.6 | 83.2 / 58.4 |
+
+Seeds agree far more than their parents: they copy one teacher, by design.
+Against B they drop towards the teacher's own overlap with B (59.1%), as
+copying it should. Blend is ahead of holdout BatchNorm against B in all
+three (+1.8, +2.1, +0.8): the A2 file submitted is `ens_a2_blend`.
+
+### Board (2026-10-12): A2 lost 3.6; B ties the best as an addition
+
+| file | board | against 69.76 |
+|---|---|---|
+| B added to the 69.76 mix (`ens_k18_spw_b`) | 69.758 | 0.00 |
+| B in place of SPW (`ens_swap_b`) | 69.472 | -0.29 |
+| A2: the 12 blend students in place of their parents (`ens_a2_blend`) | **66.155** | **-3.60** |
+
+A2 failed both its label-free check (the students moved away from B, not
+towards it) and the board. Two structural reasons, beside anything the
+students learned: in their parents' place the 12 teacher-copies move the
+mix's weight onto the five members that were not distilled (G1, Kn, N, F1,
+w1024), and the teacher was already hub-corrected, so the A2 mix was
+corrected twice. Trial 22 tests the students BESIDE their parents once; no
+new round unless that gains. B is a member worth as much as SPW, not more.
