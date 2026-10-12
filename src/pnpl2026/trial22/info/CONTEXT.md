@@ -15,8 +15,11 @@ trial 21's code (both families, prediction, ensembling, hub correction).
 | other subjects' votes added to subject 0's rows | `../cli/cross_votes.py` |
 | transduction (TransCLIP-style) | `../transduction.py`, `../cli/transduce.py` |
 | correction variants (hubw, emsk, hubpos, quota, qbnorm) | `../corrections.py`, `../cli/correct.py` |
+| embedding dumps (holdout rows, holdout-shaped chains) | `../cli/embed.py`, `chain_sequences` in `../data/sequences.py` |
+| the kNN memory voter | `../cli/knn_vote.py` |
+| the onset-gap voter | `../gaps.py`, `../cli/gap_voter.py` |
 | local checks on uneven draws of held-out dumps | `../local_checks.py` |
-| jobs and lists | `pbs/trial22_align.pbs`, `pbs/trial22_predict.pbs`, `configs/trial22/` |
+| jobs and lists | `pbs/trial22_align.pbs`, `pbs/trial22_predict.pbs`, `pbs/trial22_embed.pbs`, `configs/trial22/` |
 
 Trial 21's adaptation work (A0, A2, the hybrid B) and its results:
 `src/pnpl2026/trial21/info/holdout-adaptation.md`.

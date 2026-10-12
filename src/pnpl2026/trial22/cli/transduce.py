@@ -24,6 +24,14 @@ the plain mix (lone_fill replaces them anyway). Run `hubnorm_holdout` and
 `lone_fill` on the result as on any mix -- the doc submits both with and
 without the hub correction.
 
+`--space embedding` (v2) transduces in each member's own embedding space
+instead (`cli/embed.py`'s dumps: every head, unit length, concatenated):
+the prototypes are each word's mean embedding over the member's TRAINING
+chains -- the doc's "training prototype on holdout-shaped items" -- tau is
+fitted on its validation chains, and the local check runs on its test
+chains, which are holdout-shaped. yhat and the blend stay the CSV's scores,
+so v1 and v2 differ only in where the clusters and the graph live.
+
 The report: the doc's label-free checks -- before, whether rows sharing a
 top-1 word sit closer than other cross-sentence pairs; after, whether each
 family's seeds agree more (A0's damage showed as less), and whether the
@@ -54,6 +62,7 @@ from ..transduction import (
     zscore_rows,
 )
 from .ensemble import read_submission, standardise_rows, zscore_scores
+from .knn_vote import load as load_dump
 
 #a CSV's run family: its name without the seed and the mode
 FAMILY_PATTERN = re.compile(r"^(.*?)_s\d+(_|$)")
@@ -67,7 +76,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--inputs", nargs="+", required=True, help="the members' holdout CSVs")
     parser.add_argument("--runs", nargs="+", default=None, help="each CSV's run (name or directory), same order: dumps")
-    parser.add_argument("--protocol", default="reference", help="the dumps read for tau, prototypes and the check")
+    parser.add_argument("--protocol", default="reference", help="v1: the dumps read for tau, prototypes and the check")
+    parser.add_argument("--space", choices=("scores", "embedding"), default="scores", help="v1 scores, v2 embeddings")
     parser.add_argument("--pull", type=float, default=1.0, help="the KL term's weight: 1 is TransCLIP's, larger stays closer")
     parser.add_argument("--blend", type=float, default=0.5, help="share of the transduced scores in each member")
     parser.add_argument("--neighbours", type=int, default=3, help="graph neighbours per row, other sentences only")
@@ -132,24 +142,67 @@ def member_setup(validation):
     return temperature, prototypes, f"validation tau {temperature:.3f}, {int(np.isfinite(prototypes).all(axis=1).sum())} prototypes"
 
 
-def run_member(features, groups, temperature, prototypes, args):
+def run_member(features, scores, groups, temperature, prototypes, args):
     """One member's transduced, blended scores on a set of rows.
 
     ARGS:
-        features (np.ndarray): [N, 50] standardised scores
+        features (np.ndarray): [N, D] where the clusters and the graph live:
+            the scores themselves (v1) or the embeddings (v2)
+        scores (np.ndarray): [N, 50] standardised scores: yhat and the blend
         groups (np.ndarray): [N] sentence ids
         temperature (float or None): None uses the confidence rule
-        prototypes (np.ndarray or None)
+        prototypes (np.ndarray or None): [50, D]
         args (argparse.Namespace)
 
     RETURNS:
         blended [N, 50], result dict from `transduce`
     """
-    tau = temperature if temperature is not None else fit_temperature_confidence(features)
-    zero_shot = softmax_rows(features / tau)
+    tau = temperature if temperature is not None else fit_temperature_confidence(scores)
+    zero_shot = softmax_rows(scores / tau)
     result = transduce(features, zero_shot, groups, pull=args.pull, prototypes=prototypes,
                        n_neighbours=args.neighbours, share_floor=args.share_floor)
-    return blend(features, result["posterior"], result["shares"], args.blend), result
+    return blend(scores, result["posterior"], result["shares"], args.blend), result
+
+
+def embedding_features(dump):
+    """Every head's unit vectors side by side, the whole at unit length.
+
+    ARGS:
+        dump (dict): from `cli.embed`
+
+    RETURNS:
+        [n, D] float64
+    """
+    heads = [dump[head].astype(np.float64) for head in ("t5", "second", "tower") if head in dump]
+    unit = [head / np.maximum(np.linalg.norm(head, axis=1, keepdims=True), 1e-12) for head in heads]
+    return np.concatenate(unit, axis=1) / np.sqrt(len(unit))
+
+
+def embedding_setup(run):
+    """A member's v2 temperature and prototypes, from its chain dumps.
+
+    ARGS:
+        run (str)
+
+    RETURNS:
+        temperature (float), prototypes [50, D], how (str)
+    """
+    train, validation = load_dump(run, "chains_train"), load_dump(run, "chains_validation")
+
+    #each word's mean embedding over its training chains: the doc's prototype
+    features, labels = embedding_features(train), train["primary"].astype(np.int64)
+    prototypes = np.full((50, features.shape[1]), np.nan)
+    for word in range(50):
+        rows = labels == word
+        if rows.sum() >= MIN_PROTOTYPE_TOKENS:
+            prototypes[word] = features[rows].mean(axis=0)
+
+    #tau from the holdout-shaped validation chains, with labels
+    scored = validation["primary"] >= 0
+    temperature = fit_temperature_nll(zscore_rows(validation["logits"][scored].astype(np.float64)),
+                                      validation["primary"][scored].astype(np.int64))
+    count = int(np.isfinite(prototypes).all(axis=1).sum())
+    return temperature, prototypes, f"validation-chain tau {temperature:.3f}, {count} training-chain prototypes"
 
 
 def seed_agreement(tables_by_family):
@@ -196,10 +249,41 @@ def local_check(args, runs, validations, setups, shares, lines):
         #a resampled token keeps its sentence: its copies never neighbour each other
         draw_groups = groups[draw]
         plain = ensemble([test["scores"][draw] for test in tests])
-        transduced = [run_member(zscore_rows(test["scores"][draw]), draw_groups, temperature, prototypes, args)[0]
+        transduced = [run_member(zscore_rows(test["scores"][draw]), zscore_rows(test["scores"][draw]), draw_groups,
+                                 temperature, prototypes, args)[0]
                       for test, (temperature, prototypes) in zip(tests, setups)]
         gains.append(bacc(ensemble(transduced), labels[draw]) - bacc(plain, labels[draw]))
     lines.append(f"Local check ({args.protocol} test dumps, non-Sherlock, {len(gains)} uneven draws of 868): "
+                 f"transduced mix minus plain mix {summarise_gains(gains)}.")
+
+
+def local_check_embedding(args, setups, shares, lines):
+    """v2's check: the same procedure on the members' TEST chains, uneven draws, against the plain mix.
+
+    ARGS:
+        args (argparse.Namespace)
+        setups (list): (temperature, prototypes) per member
+        shares (np.ndarray): [50] the holdout's estimated shares
+        lines (list): report lines, appended to
+    """
+    tests = [load_dump(run, "chains_test") for run in args.runs]
+    labels = tests[0]["primary"].astype(np.int64)
+    for test in tests[1:]:
+        #⚠️ every member's chains must be the same tokens, or the mix mixes words
+        if not np.array_equal(test["primary"], tests[0]["primary"]):
+            raise SystemExit("The members' test chains list different tokens; re-run cli.embed.")
+    eligible = (labels >= 0) & ~np.char.startswith(tests[0]["task"].astype(str), "Sherlock")
+    features = [embedding_features(test) for test in tests]
+    scores = [zscore_rows(test["logits"].astype(np.float64)) for test in tests]
+    groups = tests[0]["sequence"]
+    gains = []
+    for draw in uneven_draws(labels, eligible, shares, n_draws=args.check):
+        #each draw its own "holdout"; a token's copies share its chain
+        plain = ensemble([table[draw] for table in scores])
+        transduced = [run_member(feature[draw], score[draw], groups[draw], temperature, prototypes, args)[0]
+                      for feature, score, (temperature, prototypes) in zip(features, scores, setups)]
+        gains.append(bacc(ensemble(transduced), labels[draw]) - bacc(plain, labels[draw]))
+    lines.append(f"Local check (test chains, non-Sherlock, {len(gains)} uneven draws of 868): "
                  f"transduced mix minus plain mix {summarise_gains(gains)}.")
 
 
@@ -223,24 +307,40 @@ def main():
     groups = np.array([meta["epoch"] if meta["source"] == "sentence" else -1 - meta["epoch"] for meta in metadata])
 
     #the members' dumps, when runs are named
-    validations = member_dumps(args.runs, args.protocol, "validation") if args.runs else [None] * len(args.inputs)
-    lines = [f"# Trial 22 -- transduction v1 (scores): `{out_path.name}`", "",
+    embedding = args.space == "embedding"
+    if embedding and not args.runs:
+        raise SystemExit("--space embedding reads each member's dumps: name them with --runs.")
+    use_dumps = args.runs and not embedding
+    validations = member_dumps(args.runs, args.protocol, "validation") if use_dumps else [None] * len(args.inputs)
+    version = "v2 (embeddings)" if embedding else "v1 (scores)"
+    lines = [f"# Trial 22 -- transduction {version}: `{out_path.name}`", "",
              f"{len(args.inputs)} members; pull {args.pull:g}, blend {args.blend:g}, {args.neighbours} cross-sentence "
              f"neighbours, share floor {args.share_floor:g}; {int(sentence.sum())} sentence rows.", ""]
 
     before, after, moses_parts, setups, all_shares = [], [], [], [], []
     by_family_before, by_family_after = defaultdict(list), defaultdict(list)
     separations = []
-    for path, validation in zip(args.inputs, validations):
+    for number, (path, validation) in enumerate(zip(args.inputs, validations)):
         index, primary, moses = read_submission(Path(path), *words)
         if not np.array_equal(index, np.arange(len(metadata))):
             raise SystemExit(f"{path}: its rows are not the holdout's 0..{len(metadata) - 1}.")
         features = standardise_rows(primary)
-        temperature, prototypes, how = member_setup(validation)
+
+        #v1: the clusters live in the scores; v2: in the member's embeddings
+        if embedding:
+            run = args.runs[number]
+            holdout = load_dump(run, "holdout")
+            if np.mean(holdout["logits"].argmax(axis=1) == primary.argmax(axis=1)) < 0.98:
+                raise SystemExit(f"The holdout dump of {run} does not rank as {path}: not the same member.")
+            space = embedding_features(holdout)
+            temperature, prototypes, how = embedding_setup(run)
+        else:
+            space = features
+            temperature, prototypes, how = member_setup(validation)
         setups.append((temperature, prototypes))
 
         #the sentence rows transduced; the lone rows as they are
-        blended, result = run_member(features[sentence], groups[sentence], temperature, prototypes, args)
+        blended, result = run_member(space[sentence], features[sentence], groups[sentence], temperature, prototypes, args)
         transduced = features.copy()
         transduced[sentence] = blended
         before.append(features)
@@ -249,7 +349,7 @@ def main():
         all_shares.append(result["shares"])
         by_family_before[family_of(path)].append(features[sentence])
         by_family_after[family_of(path)].append(blended)
-        separations.append(same_top1_separation(features[sentence], features[sentence], groups[sentence]))
+        separations.append(same_top1_separation(space[sentence], features[sentence], groups[sentence]))
         lines.append(f"- `{Path(path).name}`: {how}; likelihood temperature {result['temperature']:.3g}")
 
     #the mix, as cli.ensemble builds it, before and after
@@ -277,7 +377,10 @@ def main():
     #the informational local check
     if args.runs and args.check > 0:
         lines += [""]
-        local_check(args, args.runs, validations, setups, shares, lines)
+        if embedding:
+            local_check_embedding(args, setups, shares, lines)
+        else:
+            local_check(args, args.runs, validations, setups, shares, lines)
 
     #the CSV: z-scored before the softmax, so six decimals keep every rank
     primary_out = softmax_rows(zscore_scores(mixed))

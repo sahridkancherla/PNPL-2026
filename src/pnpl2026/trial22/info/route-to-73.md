@@ -46,6 +46,36 @@ shares in the ranking costs accuracy. Caution: the estimated shares absorb
 hub bias, so dividing them out already acts like a hub correction -- the
 "without hub" file tests exactly that.
 
+### v2, the embedding wave, and the kNN memory voter
+
+`cli.embed` (GPU, `pbs/trial22_embed.pbs`, one member per line of
+`configs/trial22/members.txt`) dumps each member's holdout rows -- gathered
+exactly as predicted, checked to rank as the member's own CSV -- and the
+CHAINS protocol on its train, validation and test partitions: only the
+vocabulary words as tokens, chained across at most one unscored word as the
+holdout lists them (`chain_sequences`, both families; identical tokens in
+both). Never used for training: L trained on such runs and lost 24.
+
+- `--space embedding` (v2): the clusters and the graph in the member's own
+  embeddings (every head, unit length, side by side); prototypes = each
+  word's mean training-chain embedding (the doc's); tau from validation
+  chains; the local check on test chains, which are holdout-shaped
+- `cli.knn_vote`: class-balanced soft kNN (K 32, temperature 0.05) of each
+  holdout row against the member's training chains (capped at 2,000 tokens
+  per word), heads averaged; the members' votes mixed into one file that
+  joins a stack as one extra voter. Local check per member: test chains,
+  kNN alone, member alone, both
+
+## Change 6 -- the onset-gap voter
+
+`cli.gap_voter`: per word, a Gaussian of log(gap to the next listed onset /
+the sentence's median gap), fitted on subject 0's training events (250 Hz,
+chained as the holdout lists words), re-fitted on the holdout by EM with
+the best mix's soft labels; 712 of 960 holdout rows get a vote (not a
+sentence's last word; sentences of 3+ words). Joins a stack at a 1/24
+share. Report: gap-only BAcc@10 on validation and test chains, and the
+label-free link between each row's gap and its top-1 word's typical gap.
+
 ## Change 3 -- A2's students beside their parents (probe)
 
 One file: the 69.76 mix's 23 members plus the 12 blend students (35
@@ -150,3 +180,17 @@ clustering away from each member's own scores) does not. Dividing out the
 estimated shares is no substitute for the hub correction: without it the
 file loses 2.8. Next: blend 0.9 and 1.0 at pull 1, then the winner as the
 base for B, the gap voter and the kNN voter.
+
+### Change 1 closed (2026-10-12, late)
+
+The row-specific diagnostic (each word's mean over rows removed, matched
+rows against shuffled): route 1 r = 0.770 (shuffled 0.015), route 2 r =
+0.784 (shuffled 0.004); no collapse (top-1 covers 41-47 words). The other
+listeners' votes are strongly row-specific, yet all three files lost: they
+mostly echo subject 0's own picks. Every subject's file has identical onsets,
+so position, sentence length and gaps are shared on every row and the
+models read them; a vote that repeats the base adds its errors and little
+else. The pass bar fixed for the C = 30 version (matched beats shuffled by
+0.05) cannot tell such an echo from new information, so it is withdrawn:
+change 1 closes as a negative result. The 30-component virtual subject, if
+built, gets a slot only if one is spare.

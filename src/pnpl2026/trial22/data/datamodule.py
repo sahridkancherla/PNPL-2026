@@ -16,7 +16,14 @@ from torch.utils.data import DataLoader
 
 from ..config import PROTOCOLS
 from .dataset import ContinuousItems, ReferenceRecordings, Shaping, collate_items
-from .sequences import fragment_sequences, holdout_chains, isolated_sequences, reference_sequences, sparse_sequences
+from .sequences import (
+    chain_sequences,
+    fragment_sequences,
+    holdout_chains,
+    isolated_sequences,
+    reference_sequences,
+    sparse_sequences,
+)
 
 #fragment- and sparse-protocol sequences are drawn once, from a seed of their
 #own, so every run and seed is scored on identical windows
@@ -33,7 +40,7 @@ def build_partition(cfg, table, partition, protocol, jitter_samples=0, shaping=N
         table (TargetTable or NoTargets): for each word's t5 row
         partition (str or list): "train", "validation" or "test"; a list
             takes several (all-data training)
-        protocol (str): "reference", "fragment", "sparse" or "isolated"
+        protocol (str): "reference", "fragment", "sparse", "isolated" or "chains"
         jitter_samples (int): training only
         shaping (Shaping or None): training only
         others_dir (Path or None): the other subjects' cache, training only
@@ -75,6 +82,19 @@ def build_partition(cfg, table, partition, protocol, jitter_samples=0, shaping=N
         )
     elif protocol == "isolated":
         sequences = isolated_sequences(recordings.tables, recordings.n_times, rows, cfg.samples(cfg.isolated_seconds))
+    elif protocol == "chains":
+        #trial 22: the holdout's own token form, for embedding dumps only
+        sequences = chain_sequences(
+            recordings.tables,
+            recordings.n_times,
+            rows,
+            float(cfg.sfreq),
+            cfg.fragment_min_words,
+            cfg.holdout_max_tokens,
+            cfg.fragment_max_gap_seconds,
+            cfg.tail_seconds,
+            HOLDOUT_SEED,
+        )
     else:
         sequences = sparse_sequences(
             recordings.tables,

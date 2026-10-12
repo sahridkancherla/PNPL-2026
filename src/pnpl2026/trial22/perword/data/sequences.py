@@ -13,6 +13,9 @@
                 vocabulary word of a sentence as tokens, the unscored words
                 between them skipped. It read ~27 for every run where the
                 leaderboard read 41-58, because the real holdout is dense runs
+    CHAINS      trial 22: only the vocabulary words as tokens, chained across
+                at most one unscored word as the holdout lists them; for
+                embedding dumps and checks only, never training
     ISOLATED    trial 15: EVERY word alone, with exactly the holdout's 1 s --
                 the 92 lone words of the holdout, at the size of a whole
                 partition. Scores lone words on thousands of words instead of
@@ -427,4 +430,75 @@ def sparse_sequences(
                         int(generator.integers(low, high + 1)),
                     )
                 )
+    return sequences
+
+
+#chains as the holdout strings its words: at most one unscored word between neighbours
+CHAIN_MAX_SKIPPED = 1
+
+
+def chain_sequences(tables, n_times, target_rows, sample_rate, min_words, max_words, max_gap_seconds, tail_seconds, seed):
+    """Holdout-shaped chains: only the scored words are tokens, as the holdout lists them.
+
+    Trial 22's CHAINS protocol, for embedding dumps and local checks -- never
+    for training: trial 17's L trained on such runs, learned the stories'
+    list-word order and lost 24 points on the board. Within each sentence,
+    `holdout_chains` strings scored words together across at most one
+    unscored word and gaps up to `max_gap_seconds` (the holdout: about a
+    third of its neighbouring pairs skip a word, 99.4% of its gaps under
+    0.8 s). Chains of at least `min_words` are kept, longer ones cut into
+    near-equal pieces of at most `max_words`; each keeps its MEG to the last
+    onset plus a tail drawn from the holdout's range. Far more tokens than the
+    fragment protocol's runs of strictly consecutive words.
+
+    ARGS:
+        tables (list): word tables, one per recording
+        n_times (list): samples per recording
+        target_rows (list): per recording, [n_words] t5 rows
+        sample_rate (float): Hz of the cache
+        min_words (int): shortest chain kept
+        max_words (int): longest piece, 9 as in the holdout
+        max_gap_seconds (float): a longer onset gap ends a chain
+        tail_seconds (tuple): (low, high) MEG kept after a piece's last onset
+        seed (int): the tails' draw, so every run is scored on identical sequences
+
+    RETURNS:
+        list of Sequence
+    """
+    generator = np.random.default_rng(seed)
+    max_gap = int(round(max_gap_seconds * sample_rate))
+    low, high = (int(round(value * sample_rate)) for value in tail_seconds)
+
+    sequences = []
+    for recording, (table, length, rows) in enumerate(zip(tables, n_times, target_rows)):
+        onsets = np.asarray(table["onset_sample"])
+        primary = np.asarray(table["primary"]).astype(np.int64)
+        sentences = np.asarray(table["sentence"])
+        for sentence in np.unique(sentences[sentences >= 0]):
+            #one sentence's words, in onset order; chains index into them
+            positions = np.flatnonzero(sentences == sentence)
+            for chain in holdout_chains(primary[positions], onsets[positions], CHAIN_MAX_SKIPPED, max_gap):
+                if len(chain) < min_words:
+                    continue
+                members = positions[chain]
+                start = 0
+                for size in chunk_sizes(len(members), max_words):
+                    chosen = members[start : start + size]
+                    start += size
+
+                    #a tail for every piece, drawn whether or not the piece fits
+                    tail = int(generator.integers(low, high + 1))
+                    if onsets[chosen[0]] < 0 or onsets[chosen[-1]] + tail > length:
+                        continue
+                    sequences.append(
+                        Sequence(
+                            recording,
+                            onsets[chosen],
+                            rows[chosen],
+                            primary[chosen],
+                            np.asarray(table["moses"])[chosen].astype(np.int64),
+                            False,
+                            tail,
+                        )
+                    )
     return sequences

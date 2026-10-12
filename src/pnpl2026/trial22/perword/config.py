@@ -43,7 +43,7 @@ from ...config import REPO_ROOT, Config, _coerce
 TOKEN_SETS = ("all", "invocab")
 
 #how sequences are cut for scoring; see data/sequences.py
-PROTOCOLS = ("reference", "fragment", "sparse", "isolated")
+PROTOCOLS = ("reference", "fragment", "sparse", "isolated", "chains")
 
 #what the training set is cut by: whole sentences (shaped or not), or every
 #word alone for the lone-word specialist

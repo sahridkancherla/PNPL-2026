@@ -1,0 +1,66 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=64gb:ngpus=1:gpu_type=RTX6000
+#PBS -l walltime=02:00:00
+#PBS -N pnpl-trial22-embed
+#PBS -j oe
+#PBS -o logs/
+
+# Trial 22, change 2: every member's embeddings (cli.embed) -- the holdout's
+# rows, gathered exactly as predicted, and holdout-shaped chains of the
+# training, validation and test partitions. One member per non-comment line
+# of configs/trial22/members.txt. From the repo root:
+#
+#     qsub -J 1-26 pbs/trial22_embed.pbs       every member
+#     qsub -v RUN=<n> pbs/trial22_embed.pbs    one line again
+#
+# Each dump is checked against the member's own submission CSV
+# (submissions/<run>_in_context_ts.csv): the logits must rank the same words.
+# Writes runs/<run>/embeddings/{holdout,chains_train,chains_validation,chains_test}.npz.
+#
+# ⚠️ Needs on RDS: data/trial10_reference/, data/holdout/,
+# data/trial22_training_scaler.npz (trial 22's cli.training_scaler), the
+# checkpoints and the members' CSVs. Nothing downloads.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+export PYTHONUNBUFFERED=1
+export UV_OFFLINE=1 HF_HUB_OFFLINE=1
+
+INDEX="${PBS_ARRAY_INDEX:-${RUN:-}}"
+if [ -z "$INDEX" ]; then
+    echo "no member chosen: submit with -J <range>, or -v RUN=<line of members.txt>" >&2
+    exit 1
+fi
+
+# Comment lines do not count: the n-th member is the n-th non-comment line.
+MEMBER="$(grep -v '^#' configs/trial22/members.txt | sed -n "${INDEX}p" | tr -d '[:space:]')"
+if [ -z "$MEMBER" ]; then
+    echo "line ${INDEX} of configs/trial22/members.txt is empty" >&2
+    exit 1
+fi
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.embed_${MEMBER}.live.log"
+echo "member ${INDEX}: ${MEMBER} -> runs/${MEMBER}/embeddings; live log: $LIVE_LOG"
+
+{
+    for needed in "runs/${MEMBER}/best.ckpt" "submissions/${MEMBER}_in_context_ts.csv" data/trial22_training_scaler.npz \
+                  data/trial10_reference/manifest.json data/holdout/COMPETITION_HOLDOUT/subj00_holdout01_sentence.npz; do
+        if [ ! -e "$needed" ]; then
+            echo "[preflight] not on RDS: $needed" >&2
+            exit 1
+        fi
+    done
+
+    # The chains read windows all over the training recordings: stage the cache locally.
+    STAGED_CACHE="${TMPDIR:?not set -- submit with qsub}/trial10_reference"
+    echo "[stage] data/trial10_reference ($(du -sh data/trial10_reference | cut -f1)) -> $STAGED_CACHE"
+    SECONDS=0
+    cp -r data/trial10_reference "$STAGED_CACHE"
+    echo "[stage] copied in ${SECONDS}s"
+
+    uv run --frozen python -m pnpl2026.trial22.cli.embed --ckpt "runs/${MEMBER}/best.ckpt" \
+        --holdout-dir data/holdout --check-csv "submissions/${MEMBER}_in_context_ts.csv" \
+        --cache-dir "$STAGED_CACHE" --num-workers 8 --batch-size 32
+} 2>&1 | tee "$LIVE_LOG"
