@@ -136,3 +136,17 @@ Both cross-subject routes lose, the larger weight more: at C = 5 the other
 listeners' votes add noise faster than signal. In `ensembles.csv` a
 pseudo-member (`+transduce...`, `+cross_votes...`) marks each file's
 post-processing, so the calibration never mistakes it for the plain mix.
+
+### Board (2026-10-12, late): the blend weight is the lever; the hub correction stays
+
+| file | board | against 70.147 (pull 1, blend 0.5) |
+|---|---|---|
+| pull 1, blend **0.75**, hub-corrected (`ens_t22_tc1b75`) | **70.682** | **+0.54** (new best; +0.92 over 69.758) |
+| pull 0.5, blend 0.5, hub-corrected (`ens_t22_tc05`) | 69.760 | -0.39 |
+| pull 1, blend 0.5, NO hub correction (`ens_t22_tc1_ts_lone`) | 67.378 | -2.77 |
+
+More of the transduced scores in each member helps; a looser pull (more
+clustering away from each member's own scores) does not. Dividing out the
+estimated shares is no substitute for the hub correction: without it the
+file loses 2.8. Next: blend 0.9 and 1.0 at pull 1, then the winner as the
+base for B, the gap voter and the kNN voter.
