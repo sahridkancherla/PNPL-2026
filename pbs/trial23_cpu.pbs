@@ -40,7 +40,7 @@ export UV_OFFLINE=1 HF_HUB_OFFLINE=1
 # One thread per core this job was given.
 export OMP_NUM_THREADS=8
 
-STEP="${STEP:?submit with -v STEP=<step>; the steps are listed in this script's header}"
+STEP="${STEP:?submit with -v STEP=<step>; the steps are listed in the header of this script}"
 BASE="${BASE:-submissions/ens_t22_tc1b75_ts.csv}"
 MEMBERS="$(grep -v '^#' configs/trial23/members.txt | grep -v '^trial21_b' | tr '\n' ' ')"
 SPECIALISTS="$(grep -v '^#' configs/trial23/specialists.txt | awk '{print $2}' | tr '\n' ' ')"
