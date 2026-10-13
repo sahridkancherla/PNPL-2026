@@ -1,6 +1,7 @@
 # Trial 23: the fresh seed set B, one run name per line -- the 70.68 mix's
 # 23 members at other seeds: G1, G2, Kn, K2, N, K18 at seeds 3-5 (the seed
-# lines added to configs/trial13|16|18/runs.txt), F1 s1, w1024 s1, SPW s3-5.
+# lines added to configs/trial13|16|18/runs.txt), F1 s1, w1024 s1, SPW s3-5 (trial 20's
+# spw_more runs).
 # Read by pbs/trial23_predict.pbs; each run's checkpoint is runs/<run>/best.ckpt.
 trial13_g1_s3
 trial13_g1_s4
@@ -22,6 +23,6 @@ trial12_w1024_s1
 trial18_k18_s3
 trial18_k18_s4
 trial18_k18_s5
-trial19_spw_s3
-trial19_spw_s4
-trial19_spw_s5
+trial20_spw_s3
+trial20_spw_s4
+trial20_spw_s5

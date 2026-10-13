@@ -231,4 +231,16 @@ decide whether a candidate gets a slot at all.
 
 ## Results
 
-Pending: the testbed check, the embed waves, the jobs, the board.
+**Board, 13 Oct -- averages of trial 22's transduced mixes** (no new job;
+each average then hub + lone, as for 70.68):
+
+| file | averages | board |
+|---|---|---|
+| `ens_t23_robust` | blends 0.65, 0.75, 0.9 + SPW seeds 3-5 at 0.75 | **70.849 (new best, +0.17)** |
+| `ens_t23_blendavg` | blends 0.65, 0.75, 0.9 | 70.682 (tie) |
+| `ens_t23_spwavg_tc1b75` | SPW seeds 0-2 and 3-5, both at 0.75 | 70.563 |
+
+Averaging over settings and seeds held or beat the best single setting;
+the base for trial 23's candidates can move to `ens_t23_robust_ts.csv`.
+
+Pending: the testbed check, the embed waves, the jobs.
