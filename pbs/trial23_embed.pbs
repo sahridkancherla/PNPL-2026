@@ -1,0 +1,77 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=64gb:ngpus=1:gpu_type=RTX6000
+#PBS -l walltime=02:00:00
+#PBS -N pnpl-trial23-embed
+#PBS -j oe
+#PBS -o logs/
+
+# Trial 23: every member's dumps for the testbed and the local checks
+# (trial 23's cli.embed). One run per non-comment line of LIST, by default
+# configs/trial23/members.txt. From the repo root:
+#
+#     qsub -J 1-26 pbs/trial23_embed.pbs
+#         chains38 on the validation and test partitions (the default): the
+#         Sherlock testbed's rows, and P6's / P5's MOCHA and TheMoth checks
+#     qsub -J 1-15 -v LIST=configs/trial23/lone.txt,PROTOCOL=isolated,EMBED_ARGS=--lone-tta pbs/trial23_embed.pbs
+#         P7: the lone candidates' isolated dumps, plain and with TTA
+#         (runs/<run>_tta/dumps/), for cli.lone_check
+#     qsub -J 1-26 -v RECENTRE=1 pbs/trial23_embed.pbs
+#         P8b: the chains38 dumps re-centred (chains38_<partition>_rc.npz),
+#         after `cli.recentre reference`
+#     qsub -v RUN=<n> pbs/trial23_embed.pbs    one line again
+#
+# PARTITIONS and EMBED_ARGS add to or override the defaults. The holdout is
+# not re-dumped here (trial 22's dumps already hold it).
+#
+# ⚠️ Needs on RDS: data/trial10_reference/ and the checkpoints. Nothing downloads.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+export PYTHONUNBUFFERED=1
+export UV_OFFLINE=1 HF_HUB_OFFLINE=1
+
+INDEX="${PBS_ARRAY_INDEX:-${RUN:-}}"
+LIST="${LIST:-configs/trial23/members.txt}"
+if [ -z "$INDEX" ]; then
+    echo "no member chosen: submit with -J <range>, or -v RUN=<line of ${LIST}>" >&2
+    exit 1
+fi
+PROTOCOL="${PROTOCOL:-chains38}"
+PARTITIONS="${PARTITIONS:-validation test}"
+
+# P8b's switch: the same dumps re-centred, named _rc beside the plain ones.
+if [ "${RECENTRE:-0}" = "1" ]; then
+    EMBED_ARGS="${EMBED_ARGS:-} --recentre data/trial23_recentre_reference.npz"
+fi
+
+# Comment lines do not count: the n-th member is the n-th non-comment line.
+MEMBER="$(grep -v '^#' "$LIST" | sed -n "${INDEX}p" | tr -d '[:space:]')"
+if [ -z "$MEMBER" ]; then
+    echo "line ${INDEX} of ${LIST} is empty" >&2
+    exit 1
+fi
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.embed23_${PROTOCOL}_${MEMBER}.live.log"
+echo "member ${INDEX}: ${MEMBER}, ${PROTOCOL} on ${PARTITIONS}; live log: $LIVE_LOG"
+
+{
+    for needed in "runs/${MEMBER}/best.ckpt" data/trial10_reference/manifest.json; do
+        if [ ! -e "$needed" ]; then
+            echo "[preflight] not on RDS: $needed" >&2
+            exit 1
+        fi
+    done
+
+    # The dumps read windows all over the recordings: stage the cache locally.
+    STAGED_CACHE="${TMPDIR:?not set -- submit with qsub}/trial10_reference"
+    SECONDS=0
+    cp -r data/trial10_reference "$STAGED_CACHE"
+    echo "[stage] cache copied in ${SECONDS}s"
+
+    # shellcheck disable=SC2086
+    uv run --frozen python -m pnpl2026.trial23.cli.embed --ckpt "runs/${MEMBER}/best.ckpt" \
+        --holdout-dir "" --protocol "$PROTOCOL" --partitions $PARTITIONS \
+        --cache-dir "$STAGED_CACHE" --num-workers 8 --batch-size 32 ${EMBED_ARGS:-}
+} 2>&1 | tee "$LIVE_LOG"

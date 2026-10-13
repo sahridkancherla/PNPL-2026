@@ -1,0 +1,74 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=32gb:ngpus=1:gpu_type=RTX6000
+#PBS -l walltime=01:00:00
+#PBS -N pnpl-trial23-predict
+#PBS -j oe
+#PBS -o logs/
+
+# Trial 23: one holdout prediction per non-comment line of LIST, with trial
+# 23's predict (the fixed training scaler). Minutes each. From the repo root:
+#
+#     qsub -J 1-23 pbs/trial23_predict.pbs
+#         the fresh seed set B (configs/trial23/fresh.txt, the default LIST)
+#     qsub -J 1-6 -v LIST=configs/trial23/lone.txt pbs/trial23_predict.pbs
+#         I3 at six seeds, plain (lines 1-6 of lone.txt)
+#     qsub -J 1-6 -v LIST=configs/trial23/lone.txt,TTA=1 pbs/trial23_predict.pbs
+#         P7: the same with lone-word TTA -- onset shifts -1/0/+1 and 8
+#         sensor-dropout passes; files end in _tta_dtta8
+#     qsub -J 1-26 -v LIST=configs/trial23/members.txt,RECENTRE=1 pbs/trial23_predict.pbs
+#         P8b, only if `cli.recentre check` passed: every member re-centred;
+#         files end in _rc
+#     qsub -v RUN=<n> pbs/trial23_predict.pbs     one line again
+#
+# PREDICT_ARGS adds anything else. CSVs land in submissions/, named by run and mode.
+#
+# ⚠️ Needs on RDS: data/holdout/, data/trial23_training_scaler.npz
+# (cli.training_scaler), the checkpoints; RECENTRE=1 also
+# data/trial23_recentre_reference.npz (cli.recentre reference).
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+export PYTHONUNBUFFERED=1
+export UV_OFFLINE=1 HF_HUB_OFFLINE=1
+
+INDEX="${PBS_ARRAY_INDEX:-${RUN:-}}"
+LIST="${LIST:-configs/trial23/fresh.txt}"
+if [ -z "$INDEX" ]; then
+    echo "no run chosen: submit with -J <range>, or -v RUN=<line of ${LIST}>" >&2
+    exit 1
+fi
+
+# Comment lines do not count: the n-th run is the n-th non-comment line.
+MEMBER="$(grep -v '^#' "$LIST" | sed -n "${INDEX}p" | tr -d '[:space:]')"
+if [ -z "$MEMBER" ]; then
+    echo "line ${INDEX} of ${LIST} is empty" >&2
+    exit 1
+fi
+
+# The switches, as predict's own flags.
+EXTRA="${PREDICT_ARGS:-}"
+if [ "${TTA:-0}" = "1" ]; then
+    EXTRA="${EXTRA} --onset-shifts -1 0 1 --dropout-tta 8"
+fi
+if [ "${RECENTRE:-0}" = "1" ]; then
+    EXTRA="${EXTRA} --recentre data/trial23_recentre_reference.npz"
+fi
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.predict23_${MEMBER}.live.log"
+echo "run ${INDEX} of ${LIST}: ${MEMBER}; extra: ${EXTRA:-none}; live log: $LIVE_LOG"
+
+{
+    for needed in "runs/${MEMBER}/best.ckpt" data/trial23_training_scaler.npz \
+                  data/holdout/COMPETITION_HOLDOUT/subj00_holdout01_sentence.npz; do
+        if [ ! -e "$needed" ]; then
+            echo "[preflight] not on RDS: $needed" >&2
+            exit 1
+        fi
+    done
+
+    # shellcheck disable=SC2086
+    uv run --frozen python -m pnpl2026.trial23.cli.predict --ckpt "runs/${MEMBER}/best.ckpt" \
+        --holdout-dir data/holdout ${EXTRA}
+} 2>&1 | tee "$LIVE_LOG"

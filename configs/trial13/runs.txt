@@ -10,3 +10,9 @@ configs/trial13/g2_isolated.yaml 2
 configs/trial13/g3_both.yaml 0
 configs/trial13/g3_both.yaml 1
 configs/trial13/g3_both.yaml 2
+configs/trial13/g1_fragments.yaml 3
+configs/trial13/g1_fragments.yaml 4
+configs/trial13/g1_fragments.yaml 5
+configs/trial13/g2_isolated.yaml 3
+configs/trial13/g2_isolated.yaml 4
+configs/trial13/g2_isolated.yaml 5

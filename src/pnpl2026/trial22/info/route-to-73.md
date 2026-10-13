@@ -194,3 +194,66 @@ else. The pass bar fixed for the C = 30 version (matched beats shuffled by
 0.05) cannot tell such an echo from new information, so it is withdrawn:
 change 1 closes as a negative result. The 30-component virtual subject, if
 built, gets a slot only if one is spare.
+
+### The gap voter, local (2026-10-12)
+
+Fitted on 118,565 chained training tokens. Gap alone, with labels: BAcc@10
+31.0 on validation chains (1,216 tokens), 41.4 on test chains (913) --
+a real cue, chance 20. Shortest typical gaps: at, in, of, on, it, that;
+longest: new, any, my, an, always, very. Holdout: 712 rows voted; EM moved
+the word means by 0.10 on average (the holdout's speech differs a little).
+Label-free link of each row's gap with its top-1 word's typical gap: +0.53
+-- the mix already uses much of the cue, so the voter at a 1/24 share is
+expected to add little; one slot decides.
+
+### Board (2026-10-13): the blend peaks at 0.75
+
+| blend (pull 1, hub-corrected) | 0 (the plain mix) | 0.5 | **0.75** | 0.9 | 1.0 |
+|---|---|---|---|---|---|
+| board | 69.758 | 70.147 | **70.682** | 69.682 | 69.432 |
+
+The transduced scores help mixed in, not alone. The peak is sharp (0.75 is
+1.0 above 0.9), so part of it may be the public rows' luck: the final picks
+keep the 0.5 file beside the 0.75 one. The base for the stack: blend 0.75.
+
+### The embedding wave, local (2026-10-13)
+
+All 26 dumps rank exactly as their members' CSVs (top-1 equal on 100% of
+rows). **kNN memory voter**, test chains (648 tokens): kNN alone 35-59
+against the members' own 28-53 (G2 s0 55.5 vs 32.0). Not trusted: the test
+recordings repeat training stimuli (MOCHA-TIMIT's sentences recur across
+sessions; Sherlock1 ses-12 run 1, the same chapter as the test run, is a
+training recording), so the memory finds the same sentences. The holdout's
+stimuli are new; only the board can say what the vote is worth there.
+**Transduction v2** (blend 0.75): local -0.17 (wins 50%); it FAILS the
+doc's seed-agreement check -- Kn 67.8 -> 54.3, G2 -4.6, K2 -3.6, K18 -3.5
+(A0's damage showed the same way) -- and its estimated shares are
+implausible (new 27.9%, it's 17.4%; the largest top-10 share rises to 70%).
+v2 moves to the last slot of the day, behind the other stack candidates.
+
+### Board (2026-10-13): no addition beats the 0.75 base
+
+| file | board | against 70.682 |
+|---|---|---|
+| + the onset-gap voter at 1/24 (`ens_t22_tc1b75_gap`) | 70.682 | 0.00 (a tie) |
+| B inside the transduction, 26 members (`ens_t22_tc1b75_withb`) | 70.599 | -0.08 |
+| + the kNN memory voter at 1/24 (`ens_t22_tc1b75_knn`) | 70.182 | -0.50 |
+
+As the label-free link predicted, the mix already uses the gap cue. The
+kNN vote's local strength was the test recordings' repeated stimuli; on new
+sentences it costs half a point. B adds nothing inside the stack either.
+
+### Board (2026-10-13): the 70.68 is partly luck
+
+| file | board |
+|---|---|
+| blend 0.65 (`ens_t22_tc1b65`) | 70.182 |
+| blend 0.75 with SPW's seeds 3-5 for 0-2 (`ens_t22_tc1b75_spwalt`) | 69.313 (-1.37) |
+
+The blend curve at pull 1 -- 0: 69.76, 0.5: 70.15, 0.65: 70.18, 0.75:
+70.68, 0.9: 69.68, 1.0: 69.43 -- has one spike at 0.75 between neighbours
+half a point lower, and the doc's seed-subset rebuild drops by more than its
+one-point bar. So part of 70.68 is the public rows favouring one setting and
+SPW's seeds 0-2 (SPW6 had already shown those seeds at +0.5). What looks
+real: transduction at a moderate blend adds about +0.4 over the plain mix
+(0.5 and 0.65 both). The final picks must not all sit on the 0.75 spike.

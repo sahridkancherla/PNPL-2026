@@ -10,3 +10,6 @@ configs/trial15/i3_lone_specialist.yaml 2
 configs/trial15/i3n_lone_specialist.yaml 0
 configs/trial15/i3n_lone_specialist.yaml 1
 configs/trial15/i3n_lone_specialist.yaml 2
+configs/trial15/i3_lone_specialist.yaml 3
+configs/trial15/i3_lone_specialist.yaml 4
+configs/trial15/i3_lone_specialist.yaml 5

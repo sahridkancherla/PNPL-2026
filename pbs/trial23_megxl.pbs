@@ -1,0 +1,74 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=64gb:ngpus=1:gpu_type=A100
+#PBS -l walltime=04:00:00
+#PBS -N pnpl-trial23-megxl
+#PBS -j oe
+#PBS -o logs/
+
+# Trial 23, P4: MEG-XL's frozen features for every testbed and holdout row,
+# the note's purity gate, and the settings cli.cross_graph reads
+# (cli/megxl_features.py). About an hour on the A100. From the repo root:
+#
+#     qsub pbs/trial23_megxl.pbs
+#     qsub -l select=1:ncpus=8:mem=64gb:ngpus=1:gpu_type=RTX6000 pbs/trial23_megxl.pbs
+#         the fallback GPU (24 GB: one 150 s segment per pass already)
+#
+# ⚠️ Verify gpu_type=A100 against Imperial's current job-sizing table
+#    (CLAUDE.md, "Job sizing"); a wrong combination queues forever.
+#
+# ⚠️ Needs, from a LOGIN node first (outbound internet):
+#
+#   1. MEG-XL's code (MIT), cloned outside the repo:
+#        git clone https://github.com/neural-processing-lab/MEG-XL "$HOME/MEG-XL"
+#
+#   2. einops -- the one import MEG-XL needs that the project venv lacks --
+#      aside from the venv, so the lockfile and torch never move:
+#        uv pip install --python .venv/bin/python --target "$HOME/megxllibs" einops
+#
+#   3. MEG-XL's weights and LibriBrain's fine-calibration file (the sensor
+#      positions and orientations) in the Hugging Face cache:
+#        .venv/bin/python -c "from huggingface_hub import hf_hub_download as get; \
+#            print(get('pnpl/MEG-XL', 'meg-xl-med-v2.ckpt')); \
+#            print(get('pnpl/LibriBrain', 'metadata/neo/sss_cal.dat', repo_type='dataset'))"
+#
+#   4. on RDS: the testbed map and settings (cli.testbed_check, cli.testbed),
+#      every member's chains38 and reference dumps, data/trial22_matches.json,
+#      the holdout in data/holdout, data/trial10_reference and data/trial18_others.
+#
+# ⚠️ Submit from the repo root. `-o logs/` is resolved against where qsub ran.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+# megxllibs first: einops lives there and nowhere else. MEG-XL's own code is
+# put on the path by the tool itself (--megxl-repo).
+export PYTHONPATH="$HOME/megxllibs:$PWD/src"
+export PYTHONUNBUFFERED=1
+export UV_OFFLINE=1
+# Offline: a compute node has no internet, so a cache miss must fail at once
+# rather than hang on a download.
+export HF_HUB_OFFLINE=1
+
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.trial23_megxl.live.log"
+echo "live log: $LIVE_LOG"
+
+{
+    for needed in "$HOME/MEG-XL/brainstorm/models/criss_cross_transformer.py" \
+                  "$HOME/MEG-XL/brainstorm/neuro_tokenizers/biocodec_ckpt.pt" \
+                  data/trial23_testbed_map.npz data/trial22_matches.json; do
+        if [ ! -e "$needed" ]; then
+            echo "[preflight] missing: $needed -- see this script's header" >&2
+            exit 1
+        fi
+    done
+
+    # The 70.68 mix's 23 members: the list every trial-23 job reads, without trial 21's B.
+    MEMBERS="$(grep -v '^#' configs/trial23/members.txt | grep -v '^trial21_b' | tr '\n' ' ')"
+
+    # The project venv's python directly: `uv run` re-syncs the environment
+    # first, and nothing here should touch it.
+    # shellcheck disable=SC2086
+    .venv/bin/python -m pnpl2026.trial23.cli.megxl_features --megxl-repo "$HOME/MEG-XL" \
+        --members $MEMBERS --holdout-dir data/holdout ${MEGXL_ARGS:-}
+} 2>&1 | tee "$LIVE_LOG"

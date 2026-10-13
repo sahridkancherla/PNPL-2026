@@ -1,0 +1,20 @@
+# Trial 23, P7: the lone-word candidates, one run name per line -- I3 at six
+# seeds (s3-5 are configs/trial15/runs.txt lines 13-15) and the continuous SW,
+# SPW and B it is compared with. Read by pbs/trial23_embed.pbs with
+# LIST=configs/trial23/lone.txt, PROTOCOL=isolated, EMBED_ARGS=--lone-tta; each
+# run's checkpoint is runs/<run>/best.ckpt.
+trial15_i3_s0
+trial15_i3_s1
+trial15_i3_s2
+trial15_i3_s3
+trial15_i3_s4
+trial15_i3_s5
+trial19_sw_s0
+trial19_sw_s1
+trial19_sw_s2
+trial19_spw_s0
+trial19_spw_s1
+trial19_spw_s2
+trial21_b_s0
+trial21_b_s1
+trial21_b_s2

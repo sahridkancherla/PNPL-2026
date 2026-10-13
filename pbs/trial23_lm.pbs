@@ -1,0 +1,49 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=64gb:ngpus=1:gpu_type=RTX6000
+#PBS -l walltime=02:00:00
+#PBS -N pnpl-trial23-lm
+#PBS -j oe
+#PBS -o logs/
+
+# Trial 23, P5: the lm prior's counts. GPT-2 medium samples 4M tokens of its
+# own text (nothing about the stimulus goes in) and the 50 scored words'
+# adjacent and one-skip transitions are counted ->
+# data/trial23_lm_transitions.npz, report runs/trial23_lm_transitions.md.
+# About 15-30 minutes on one GPU. From the repo root:
+#
+#     qsub pbs/trial23_lm.pbs
+#
+# ⚠️ Needs, from a LOGIN node first (outbound internet):
+#
+#   1. transformers aside from the project venv -- trial 10's $HOME/t5libs
+#      already holds it; if not:
+#        uv pip install --python .venv/bin/python --target "$HOME/t5libs" transformers
+#
+#   2. GPT-2 medium's files in the Hugging Face cache (~1.5 GB):
+#        PYTHONPATH="$HOME/t5libs" .venv/bin/python -c "from huggingface_hub \
+#            import snapshot_download; snapshot_download('openai-community/gpt2-medium', \
+#            allow_patterns=['*.json', '*.txt', '*.safetensors'])"
+#
+# ⚠️ Submit from the repo root. `-o logs/` is resolved against where qsub ran.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+# t5libs first: transformers lives there and nowhere else.
+export PYTHONPATH="$HOME/t5libs:$PWD/src"
+export PYTHONUNBUFFERED=1
+export UV_OFFLINE=1
+# Offline: a compute node has no internet, so a cache miss must fail at once
+# rather than hang on a download.
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.trial23_lm.live.log"
+echo "live log: $LIVE_LOG"
+
+{
+    # The project venv's python directly: `uv run` re-syncs the environment
+    # first, and nothing here should touch it.
+    .venv/bin/python -m pnpl2026.trial23.cli.sequence_prior lm ${LM_ARGS:-}
+} 2>&1 | tee "$LIVE_LOG"

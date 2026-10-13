@@ -1,0 +1,78 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=64gb
+#PBS -l walltime=02:00:00
+#PBS -N pnpl-trial23-cpu
+#PBS -j oe
+#PBS -o logs/
+
+# Trial 23's CPU steps -- the testbed, the cross-subject votes, the gates --
+# each with the standard arguments, so a step is one line. From the repo root:
+#
+#     qsub -v STEP=<step> pbs/trial23_cpu.pbs
+#
+#     testbed_check          does the testbed exist? (cli.testbed_check)
+#     testbed                P1/SNF/P3/P8a tuned on ses-11, tested on ses-12 (cli.testbed)
+#     cross_graph            those votes on the holdout, on BASE (cli.cross_graph)
+#     boundary_diagnose      P6: is there a boundary gap? (cli.boundary diagnose)
+#     boundary_apply         P6: the specialists on BASE's first/last rows (cli.boundary apply)
+#     sequence_prior_check   P5: both priors, gated on MOCHA test (cli.sequence_prior check)
+#     row_encoder            P2: train, gate on ses-12, embed the holdout (cli.row_encoder)
+#     cross_graph_encoder    P2's embeddings in the votes, on BASE
+#     cross_graph_megxl      P4's features in the votes, on BASE
+#     recentre_reference     P8b: the training covariance (cli.recentre reference)
+#     recentre_check         P8b: with against without, both held-out partitions
+#
+# BASE is the holdout mix before the hub correction; default the 70.68
+# file's, submissions/ens_t22_tc1b75_ts.csv. STEP_ARGS adds anything else.
+# The local checks use the 70.68 mix's 23 members: configs/trial23/members.txt
+# without trial 21's B. Minutes each; the testbed and the holdout readers the longest.
+#
+# ⚠️ Needs on RDS what each step reads -- the dumps (pbs/trial23_embed.pbs),
+# the caches, data/holdout/, data/trial22_matches.json, the testbed map.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+export PYTHONUNBUFFERED=1
+export UV_OFFLINE=1 HF_HUB_OFFLINE=1
+# One thread per core this job was given.
+export OMP_NUM_THREADS=8
+
+STEP="${STEP:?submit with -v STEP=<step>; the steps are listed in this script's header}"
+BASE="${BASE:-submissions/ens_t22_tc1b75_ts.csv}"
+MEMBERS="$(grep -v '^#' configs/trial23/members.txt | grep -v '^trial21_b' | tr '\n' ' ')"
+SPECIALISTS="$(grep -v '^#' configs/trial23/specialists.txt | awk '{print $2}' | tr '\n' ' ')"
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.trial23_${STEP}.live.log"
+echo "step ${STEP}; base ${BASE}; live log: $LIVE_LOG"
+
+# Every step runs trial 23's tools with the venv as locked.
+tool() {
+    uv run --frozen python -m "pnpl2026.trial23.cli.$1" "${@:2}"
+}
+
+{
+    # shellcheck disable=SC2086
+    case "$STEP" in
+        testbed_check)        tool testbed_check ${STEP_ARGS:-} ;;
+        testbed)              tool testbed --members $MEMBERS ${STEP_ARGS:-} ;;
+        cross_graph)          tool cross_graph --base "$BASE" --holdout-dir data/holdout ${STEP_ARGS:-} ;;
+        boundary_diagnose)    tool boundary diagnose --members $MEMBERS --holdout-dir data/holdout ${STEP_ARGS:-} ;;
+        boundary_apply)       tool boundary apply --members $MEMBERS --specialists $SPECIALISTS --base "$BASE" \
+                                  --holdout-dir data/holdout ${STEP_ARGS:-} ;;
+        sequence_prior_check) tool sequence_prior check --members $MEMBERS ${STEP_ARGS:-} ;;
+        row_encoder)          tool row_encoder --members $MEMBERS --base "$BASE" --holdout-dir data/holdout ${STEP_ARGS:-} ;;
+        cross_graph_encoder)  tool cross_graph --base "$BASE" --holdout-dir data/holdout \
+                                  --features data/trial23_row_encoder_holdout.npz \
+                                  --settings data/trial23_row_encoder_settings.json ${STEP_ARGS:-} ;;
+        cross_graph_megxl)    tool cross_graph --base "$BASE" --holdout-dir data/holdout \
+                                  --features data/trial23_megxl_holdout.npz \
+                                  --settings data/trial23_megxl_settings.json ${STEP_ARGS:-} ;;
+        recentre_reference)   tool recentre reference ${STEP_ARGS:-} ;;
+        recentre_check)       tool recentre check --members $MEMBERS ${STEP_ARGS:-} ;;
+        *)
+            echo "unknown STEP ${STEP}; the steps are listed in this script's header" >&2
+            exit 1 ;;
+    esac
+} 2>&1 | tee "$LIVE_LOG"

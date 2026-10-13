@@ -1,0 +1,7 @@
+# Trial 23, P6: one boundary / short-sentence specialist per line -- <parent checkpoint> <run name>.
+# The parents are the user's choice (13 Oct): G1, G2, Kn, K2, K18 at seed 0. pbs/trial23_finetune.pbs.
+runs/trial13_g1_s0/best.ckpt trial23_p6_g1_s0
+runs/trial13_g2_s0/best.ckpt trial23_p6_g2_s0
+runs/trial16_kn_s0/best.ckpt trial23_p6_kn_s0
+runs/trial18_k2_s0/best.ckpt trial23_p6_k2_s0
+runs/trial18_k18_s0/best.ckpt trial23_p6_k18_s0

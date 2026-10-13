@@ -22,3 +22,12 @@ configs/trial18/k18_layer18.yaml 2
 configs/trial18/k1_fragments_layer3.yaml 0
 configs/trial18/k1_fragments_layer3.yaml 1
 configs/trial18/k1_fragments_layer3.yaml 2
+configs/trial18/n_no_context.yaml 3
+configs/trial18/n_no_context.yaml 4
+configs/trial18/n_no_context.yaml 5
+configs/trial18/k2_layer3.yaml 3
+configs/trial18/k2_layer3.yaml 4
+configs/trial18/k2_layer3.yaml 5
+configs/trial18/k18_layer18.yaml 3
+configs/trial18/k18_layer18.yaml 4
+configs/trial18/k18_layer18.yaml 5
