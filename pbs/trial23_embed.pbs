@@ -1,6 +1,6 @@
 #!/bin/bash
 #PBS -l select=1:ncpus=8:mem=64gb:ngpus=1:gpu_type=RTX6000
-#PBS -l walltime=02:00:00
+#PBS -l walltime=00:15:00
 #PBS -N pnpl-trial23-embed
 #PBS -j oe
 #PBS -o logs/
@@ -12,7 +12,7 @@
 #     qsub -J 1-26 pbs/trial23_embed.pbs
 #         chains38 on the validation and test partitions (the default): the
 #         Sherlock testbed's rows, and P6's / P5's MOCHA and TheMoth checks
-#     qsub -J 1-15 -v LIST=configs/trial23/lone.txt,PROTOCOL=isolated,EMBED_ARGS=--lone-tta pbs/trial23_embed.pbs
+#     qsub -l walltime=02:00:00 -J 1-15 -v LIST=configs/trial23/lone.txt,PROTOCOL=isolated,EMBED_ARGS=--lone-tta pbs/trial23_embed.pbs
 #         P7: the lone candidates' isolated dumps, plain and with TTA
 #         (runs/<run>_tta/dumps/), for cli.lone_check
 #     qsub -J 1-26 -v RECENTRE=1 pbs/trial23_embed.pbs
@@ -24,6 +24,10 @@
 # not re-dumped here (trial 22's dumps already hold it).
 #
 # ⚠️ Needs on RDS: data/trial10_reference/ and the checkpoints. Nothing downloads.
+
+#
+# Walltime: 15 min fits chains38 (about 1 min measured); --lone-tta's 11
+# passes need the -l walltime=02:00:00 shown on its line.
 
 set -euo pipefail
 

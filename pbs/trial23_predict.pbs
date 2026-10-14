@@ -1,6 +1,6 @@
 #!/bin/bash
 #PBS -l select=1:ncpus=8:mem=32gb:ngpus=1:gpu_type=RTX6000
-#PBS -l walltime=01:00:00
+#PBS -l walltime=00:30:00
 #PBS -N pnpl-trial23-predict
 #PBS -j oe
 #PBS -o logs/
@@ -12,7 +12,7 @@
 #         the fresh seed set B (configs/trial23/fresh.txt, the default LIST)
 #     qsub -J 1-6 -v LIST=configs/trial23/lone.txt pbs/trial23_predict.pbs
 #         I3 at six seeds, plain (lines 1-6 of lone.txt)
-#     qsub -J 1-6 -v LIST=configs/trial23/lone.txt,TTA=1 pbs/trial23_predict.pbs
+#     qsub -l walltime=02:00:00 -J 1-6 -v LIST=configs/trial23/lone.txt,TTA=1 pbs/trial23_predict.pbs
 #         P7: the same with lone-word TTA -- onset shifts -1/0/+1 and 8
 #         sensor-dropout passes; files end in _tta_dtta8
 #     qsub -J 1-26 -v LIST=configs/trial23/members.txt,RECENTRE=1 pbs/trial23_predict.pbs
@@ -25,6 +25,10 @@
 # ⚠️ Needs on RDS: data/holdout/, data/trial23_training_scaler.npz
 # (cli.training_scaler), the checkpoints; RECENTRE=1 also
 # data/trial23_recentre_reference.npz (cli.recentre reference).
+
+#
+# Walltime: 30 min fits a plain prediction (under 10 min measured); TTA's 11
+# passes need the -l walltime=02:00:00 shown on its line.
 
 set -euo pipefail
 
