@@ -12,10 +12,15 @@ cross-subject method is gated on.
 Per subject and session, both events tables at 250 Hz (`timeds`, exact):
 
     1   the word sequences aligned (difflib, on normalised words)
-    2   every aligned pair's onset offset: the same audio has ONE offset,
-        to within a sample, for every word
-    3   the share of aligned words within one sample (4 ms) of the median
-        offset, and the spread of the rest
+    2   every aligned pair's onset offset. Measured 14 Oct: the text is
+        identical, and the offset is constant to the sample within a
+        stretch of continuous playback but jumps by 2-8 samples (8-32 ms) at
+        the 1-3 s pauses between sentences -- playback timing at the pauses
+        differed per session -- so it drifts by up to ~1.6 s over a chapter
+    3   a pair is exact when it lies in a run of at least 3 consecutive
+        aligned words whose offsets step by at most one sample (4 ms); the
+        report gives the share exact, the runs, the offsets' range, and the
+        largest deviation from a run's own median offset
 
 Writes runs/trial23_testbed_check.md and data/trial23_testbed_map.npz: for
 each (subject, session), subject 0's word-table rows, the subject's rows of
@@ -45,8 +50,11 @@ OTHERS_RUN = "1"
 SESSIONS = ("11", "12")
 TASK = "Sherlock1"
 
-#a pair is exact when its offset is within one sample of the median
+#consecutive aligned words belong to one run when their offsets differ by at most this
 EXACT_SAMPLES = 1
+
+#a run this long is continuous playback; shorter ones are dropped as chance alignments
+MIN_RUN = 3
 
 
 def parse_args():
@@ -76,25 +84,34 @@ def align_words(reference_words, other_words):
     return np.array(pairs, dtype=np.int64).reshape(-1, 2)
 
 
-def exact_pairs(reference_onsets, other_onsets, pairs):
-    """The aligned pairs whose onset offset is the recording's own, to within a sample.
+def exact_pairs(reference_onsets, other_onsets, pairs, min_run=MIN_RUN):
+    """The aligned pairs inside runs of continuous playback: one offset, to within a sample.
 
     ARGS:
         reference_onsets (np.ndarray): [n] samples at 250 Hz
         other_onsets (np.ndarray): [m]
         pairs (np.ndarray): [k, 2] from `align_words`
+        min_run (int): consecutive pairs a run needs
 
     RETURNS:
-        exact [j, 2], median offset (int, samples at 250 Hz), deviations [k]
+        exact [j, 2], median offset (int, samples at 250 Hz), each exact
+        pair's deviation from its run's median offset [j], runs kept (int)
     """
     if len(pairs) == 0:
-        return pairs, 0, np.zeros(0)
+        return pairs, 0, np.zeros(0), 0
     offsets = other_onsets[pairs[:, 1]] - reference_onsets[pairs[:, 0]]
 
-    #one audio file played once: one offset for every word
-    median = int(np.round(np.median(offsets)))
-    deviations = np.abs(offsets - median)
-    return pairs[deviations <= EXACT_SAMPLES], median, deviations
+    #a new run wherever the offset steps by more than a sample: a playback pause
+    breaks = np.flatnonzero(np.abs(np.diff(offsets)) > EXACT_SAMPLES) + 1
+    keep = np.zeros(len(pairs), dtype=bool)
+    deviations = np.zeros(len(pairs))
+    runs = 0
+    for run in np.split(np.arange(len(pairs)), breaks):
+        deviations[run] = np.abs(offsets[run] - np.median(offsets[run]))
+        if len(run) >= min_run:
+            keep[run] = True
+            runs += 1
+    return pairs[keep], int(np.round(np.median(offsets))), deviations[keep], runs
 
 
 def find(recordings, subject, session, run):
@@ -123,10 +140,12 @@ def main():
 
     lines = ["# Trial 23 -- the Sherlock testbed: did the others hear subject 0's chapters?", "",
              f"Subject 0's {TASK} sessions {', '.join(SESSIONS)} run {REFERENCE_RUN} against each subject's run "
-             f"{OTHERS_RUN}. Words aligned by text; a pair is exact when its onset offset is within "
-             f"{EXACT_SAMPLES} sample (4 ms) of the recording's median offset.", "",
-             "| subject | session | subject 0 words | subject's words | aligned | exact | offset (s) | 99% deviation (ms) |",
-             "|---|---|---|---|---|---|---|---|"]
+             f"{OTHERS_RUN}. Words aligned by text; a pair is exact when it lies in a run of {MIN_RUN}+ consecutive "
+             f"aligned words whose offsets step by at most {EXACT_SAMPLES} sample (4 ms): continuous playback, "
+             "the offset jumping only at pauses.", "",
+             "| subject | session | subject 0 words | subject's words | aligned | exact | runs | offset range (s) | "
+             "largest in-run deviation (ms) |",
+             "|---|---|---|---|---|---|---|---|---|"]
     stored = {}
     for session in SESSIONS:
         record = find(reference_recordings, "0", session, REFERENCE_RUN)
@@ -142,11 +161,12 @@ def main():
 
             #the same text first, then the same timing
             pairs = align_words(reference["word"], other["word"])
-            exact, median, deviations = exact_pairs(reference["onset_sample"], other["onset_sample"], pairs)
-            spread = 1000.0 * np.percentile(deviations, 99) / EVENTS_RATE if len(deviations) else float("nan")
+            exact, median, deviations, runs = exact_pairs(reference["onset_sample"], other["onset_sample"], pairs)
+            offsets = other["onset_sample"][exact[:, 1]] - reference["onset_sample"][exact[:, 0]] if len(exact) else np.zeros(1)
+            in_run = 1000.0 * deviations.max() / EVENTS_RATE if len(deviations) else float("nan")
             lines.append(f"| {subject} | {session} | {len(reference['word'])} | {len(other['word'])} | "
-                         f"{len(pairs)} | {len(exact)} ({100 * len(exact) / max(len(reference['word']), 1):.1f}%) | "
-                         f"{median / EVENTS_RATE:+.3f} | {spread:.1f} |")
+                         f"{len(pairs)} | {len(exact)} ({100 * len(exact) / max(len(reference['word']), 1):.1f}%) | {runs} | "
+                         f"{offsets.min() / EVENTS_RATE:+.3f} .. {offsets.max() / EVENTS_RATE:+.3f} | {in_run:.1f} |")
             key = f"sub{subject}_ses{session}"
             stored[f"{key}_pairs"] = exact
             stored[f"{key}_offset50"] = np.array(int(np.round(median * CACHE_RATE / EVENTS_RATE)))

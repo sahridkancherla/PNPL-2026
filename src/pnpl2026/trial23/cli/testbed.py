@@ -51,6 +51,9 @@ SESSIONS = {"11": ("validation", "test"), "12": ("test", "validation")}
 #span around a chain for the MCCA fit: 0.5 s before its first onset, 1.7 s after its last
 SPAN_BEFORE, SPAN_AFTER = 25, 85
 
+#a subject joins the testbed when its exact pairs cover this share of subject 0's rows
+MIN_COVERAGE = 0.8
+
 #the grids, fixed in advance
 COMPONENTS = (20, 30, 40)
 ALPHAS = (0.7, 0.8, 0.9)
@@ -132,37 +135,84 @@ def hub_bacc(scores, labels):
     return bacc(apply_correction(scores, fit_zscore(scores)), labels)
 
 
-def aligned_pieces(rows, session, mapping, args):
-    """Every subject's piece of MEG around each chain, aligned to subject 0's.
+def subject_coverage(rows, session, mapping):
+    """Each mapped subject's share of subject 0's rows it has an exact pair for.
+
+    ARGS:
+        rows (dict): from `session_rows`
+        session (str)
+        mapping (NpzFile): from cli.testbed_check
+
+    RETURNS:
+        dict: subject (str) -> (coverage in [0, 1], mapped [n_rows] int64, -1 unmatched)
+    """
+    coverage = {}
+    for subject in (str(subject) for subject in mapping["subjects"]):
+        key = f"sub{subject}_ses{session}_pairs"
+        if key not in mapping.files:
+            continue
+        pairs = mapping[key].reshape(-1, 2)
+        lookup = dict(zip(pairs[:, 0].tolist(), pairs[:, 1].tolist()))
+        #int64 even for no rows: an empty float array cannot index
+        mapped = np.array([lookup.get(int(index), -1) for index in rows["table_index"]], dtype=np.int64)
+        coverage[subject] = (float((mapped >= 0).mean()) if len(mapped) else 0.0, mapped)
+    return coverage
+
+
+def aligned_pieces(rows, session, mapping, args, only=None):
+    """Every kept subject's piece of MEG around each chain, aligned to subject 0's.
+
+    A subject is kept when its exact pairs cover at least MIN_COVERAGE of
+    subject 0's rows: one that matched little would otherwise cut the rows
+    every subject heard down to nothing.
 
     ARGS:
         rows (dict): from `session_rows`
         session (str)
         mapping (NpzFile): from cli.testbed_check
         args (argparse.Namespace)
+        only (list or None): exactly these subjects (a second call keeps the first's)
 
     RETURNS:
         pieces (list per subject, 0 first, of lists per chain of [306, n]),
         onsets (list per subject of [n_rows] onset within the row's piece),
-        piece_of_row [n_rows], subjects (list of str, the others), covered [n_rows] bool
+        piece_of_row [n_rows], subjects (list of str, the others kept), covered [n_rows] bool
     """
     reference = np.load(REPO_ROOT / args.reference_cache / f"meg_{rows['key']}.npy", mmap_mode="r")
-    subjects = [str(subject) for subject in mapping["subjects"] if f"sub{subject}_ses{session}_pairs" in mapping.files]
+    coverage = subject_coverage(rows, session, mapping)
+    if only is None:
+        subjects = [subject for subject, (share, _) in coverage.items() if share >= MIN_COVERAGE]
+        for subject, (share, _) in coverage.items():
+            if share < MIN_COVERAGE:
+                print(f"[testbed] ses-{session}: subject {subject} dropped -- exact pairs cover {100 * share:.1f}% of subject 0's rows")
+    else:
+        subjects = list(only)
+    if not subjects:
+        raise SystemExit(f"ses-{session}: no subject's exact pairs cover {100 * MIN_COVERAGE:.0f}% of subject 0's rows "
+                         f"(coverage: {', '.join(f'{s} {100 * c:.0f}%' for s, (c, _) in coverage.items())}). "
+                         "See runs/trial23_testbed_check.md: the testbed cannot be built from this map.")
 
-    #each other subject's table rows for subject 0's: exact pairs only
+    #each kept subject's table rows for subject 0's: exact pairs only
     others = []
     covered = np.ones(len(rows["labels"]), dtype=bool)
     for subject in subjects:
-        pairs = mapping[f"sub{subject}_ses{session}_pairs"]
-        lookup = dict(zip(pairs[:, 0].tolist(), pairs[:, 1].tolist()))
+        mapped = coverage[subject][1]
         other_key = str(mapping[f"sub{subject}_ses{session}_other_key"])
         with np.load(REPO_ROOT / args.others_cache / f"words_{other_key}.npz") as table:
             other_onsets = table["onset_sample"].astype(np.int64)
-        mapped = np.array([lookup.get(int(index), -1) for index in rows["table_index"]])
         covered &= mapped >= 0
         others.append({"meg": np.load(REPO_ROOT / args.others_cache / f"meg_{other_key}.npy", mmap_mode="r"),
                        "onsets": np.where(mapped >= 0, other_onsets[np.maximum(mapped, 0)], -1),
                        "offset": int(mapping[f"sub{subject}_ses{session}_offset50"])})
+
+    #the offset jumps by a few samples at every playback pause: each chain's own, from its matched words
+    chain_offset = []
+    for other in others:
+        local = {}
+        for chain in np.unique(rows["groups"]):
+            matched = (rows["groups"] == chain) & (other["onsets"] >= 0)
+            local[chain] = int(np.round(np.median(other["onsets"][matched] - rows["onsets"][matched]))) if matched.any() else other["offset"]
+        chain_offset.append(local)
 
     #one piece per chain: subject 0's span, shifted by each subject's offset
     chains = np.unique(rows["groups"])
@@ -176,8 +226,8 @@ def aligned_pieces(rows, session, mapping, args):
         pieces[0].append(np.asarray(reference[start:stop], dtype=np.float64).T)
         onsets[0][members] = rows["onsets"][members] - start
         for index, other in enumerate(others, start=1):
-            #the same audio span in this subject's recording, clipped to it
-            other_start = min(max(start + other["offset"], 0), other["meg"].shape[0] - (stop - start))
+            #the same audio span in this subject's recording, at this chain's offset, clipped to it
+            other_start = min(max(start + chain_offset[index - 1][chain], 0), other["meg"].shape[0] - (stop - start))
             pieces[index].append(np.asarray(other["meg"][other_start : other_start + stop - start], dtype=np.float64).T)
             onsets[index][members] = np.clip(np.where(other["onsets"][members] >= 0, other["onsets"][members] - other_start,
                                                       rows["onsets"][members] - start), 0, stop - start - 1)
@@ -199,11 +249,14 @@ def prepare_session(members, session, mapping, args):
     rows, scores = session_rows(members, session)
     pieces, onsets, piece_of_row, subjects, covered = aligned_pieces(rows, session, mapping, args)
     if not covered.all():
-        #only rows every subject heard: the vote must have the same voters everywhere
+        #only rows every kept subject heard: the vote must have the same voters everywhere
         keep = np.flatnonzero(covered)
+        print(f"[testbed] ses-{session}: {len(keep)} of {len(covered)} rows heard by all {len(subjects)} kept subjects")
+        if len(keep) == 0:
+            raise SystemExit(f"ses-{session}: no row is heard by every kept subject; see runs/trial23_testbed_check.md.")
         rows = {name: (value[keep] if isinstance(value, np.ndarray) else value) for name, value in rows.items()}
         scores = [score[keep] for score in scores]
-        pieces, onsets, piece_of_row, subjects, _ = aligned_pieces(rows, session, mapping, args)
+        pieces, onsets, piece_of_row, subjects, _ = aligned_pieces(rows, session, mapping, args, only=subjects)
     plain, base = base_pipeline(members, scores, rows, session)
     return {"rows": rows, "pieces": pieces, "onsets": onsets, "piece_of_row": piece_of_row, "subjects": subjects,
             "covered": covered, "plain": plain, "base": base}
