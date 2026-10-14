@@ -21,6 +21,11 @@
 #     cross_graph_megxl      P4's features in the votes, on BASE
 #     recentre_reference     P8b: the training covariance (cli.recentre reference)
 #     recentre_check         P8b: with against without, both held-out partitions
+#     finish                 BASE through the hub correction and I3's lone rows -> <BASE stem>_hubh_lone.csv
+#     robust                 robust's recipe rebuilt from the 23 members minus EXCLUDE (a regex on run
+#                            names): blends 0.65/0.75/0.9, and 0.75 with SPW seeds 3-5, averaged, then
+#                            finished -> submissions/ens_t23_<NAME>_robust_ts_hubh_lone.csv. About an hour.
+#                            e.g. qsub -v STEP=robust,EXCLUDE=trial18_n_,NAME=noN pbs/trial23_cpu.pbs
 #
 # BASE is the holdout mix before the hub correction; default the 70.68
 # file's, submissions/ens_t22_tc1b75_ts.csv. STEP_ARGS adds anything else.
@@ -52,6 +57,29 @@ tool() {
     uv run --frozen python -m "pnpl2026.trial23.cli.$1" "${@:2}"
 }
 
+# robust's four transduced mixes without EXCLUDE's members, averaged, then hub + lone rows.
+build_robust() {
+    local name="${NAME:?submit with -v STEP=robust,EXCLUDE=<regex>,NAME=<tag>}"
+    local runs alternative inputs pair
+    runs="$(echo $MEMBERS | tr ' ' '\n' | grep -v -E "${EXCLUDE:-^$}" | tr '\n' ' ')"
+    #SPW's seeds 3-5 (trial 20) in place of 0-2, for the fourth mix
+    alternative="$(echo $runs | tr ' ' '\n' | sed -e 's/^trial19_spw_s0$/trial20_spw_s3/' -e 's/^trial19_spw_s1$/trial20_spw_s4/' -e 's/^trial19_spw_s2$/trial20_spw_s5/' | tr '\n' ' ')"
+    echo "[robust] $(echo $runs | wc -w) members: $runs"
+    for pair in 65:0.65 75:0.75 90:0.9; do
+        tool transduce --inputs $(for r in $runs; do printf 'submissions/%s_in_context_ts.csv ' "$r"; done) --runs $runs \
+            --pull 1.0 --blend "${pair##*:}" --check 0 --holdout-dir data/holdout --force \
+            --out "submissions/ens_t23_${name}_tc1b${pair%%:*}_ts.csv"
+    done
+    tool transduce --inputs $(for r in $alternative; do printf 'submissions/%s_in_context_ts.csv ' "$r"; done) --runs $alternative \
+        --pull 1.0 --blend 0.75 --check 0 --holdout-dir data/holdout --force --out "submissions/ens_t23_${name}_tc1b75_spwalt_ts.csv"
+    tool ensemble --inputs "submissions/ens_t23_${name}_tc1b65_ts.csv" "submissions/ens_t23_${name}_tc1b75_ts.csv" \
+        "submissions/ens_t23_${name}_tc1b90_ts.csv" "submissions/ens_t23_${name}_tc1b75_spwalt_ts.csv" \
+        --out "submissions/ens_t23_${name}_robust_ts.csv" --force
+    tool hubnorm_holdout --csv "submissions/ens_t23_${name}_robust_ts.csv" --method zscore --holdout-dir data/holdout --force
+    tool lone_fill --csv "submissions/ens_t23_${name}_robust_ts_hubh.csv" --holdout-dir data/holdout --force \
+        --lone-csvs submissions/trial15_i3_s{0,1,2}_in_context_ts.csv --lone-runs runs/trial15_i3_s{0,1,2}
+}
+
 {
     # shellcheck disable=SC2086
     case "$STEP" in
@@ -71,6 +99,11 @@ tool() {
                                   --settings data/trial23_megxl_settings.json ${STEP_ARGS:-} ;;
         recentre_reference)   tool recentre reference ${STEP_ARGS:-} ;;
         recentre_check)       tool recentre check --members $MEMBERS ${STEP_ARGS:-} ;;
+        finish)               tool hubnorm_holdout --csv "$BASE" --method zscore --holdout-dir data/holdout --force &&
+                              tool lone_fill --csv "${BASE%.csv}_hubh.csv" --holdout-dir data/holdout --force \
+                                  --lone-csvs submissions/trial15_i3_s{0,1,2}_in_context_ts.csv \
+                                  --lone-runs runs/trial15_i3_s{0,1,2} ${STEP_ARGS:-} ;;
+        robust)               build_robust ;;
         *)
             echo "unknown STEP ${STEP}; the steps are listed in this script's header" >&2
             exit 1 ;;

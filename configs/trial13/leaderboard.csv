@@ -111,3 +111,10 @@ ens_t22_tc1b75_spwalt,in_context_ts_tc1b75_hubh_lone,69.313,2026-10-13,ens_t22_t
 ens_t23_spwavg_tc1b75,in_context_ts_hubh_lone,70.563,2026-10-13,ens_t23_spwavg_tc1b75_ts_hubh_lone.csv
 ens_t23_blendavg,in_context_ts_hubh_lone,70.682,2026-10-13,ens_t23_blendavg_ts_hubh_lone.csv
 ens_t23_robust,in_context_ts_hubh_lone,70.849,2026-10-13,ens_t23_robust_ts_hubh_lone.csv
+ens_t23_robustb,in_context_ts_hubh_lone,70.849,2026-10-14,ens_t23_robustb_ts_hubh_lone.csv
+ens_t23_robustwide,in_context_ts_hubh_lone,70.182,2026-10-14,ens_t23_robustwide_ts_hubh_lone.csv
+ens_t23_robust_xgraph,in_context_ts_hubh_lone,69.897,2026-10-14,ens_t23_robust_ts_xgraph_hubh_lone.csv
+ens_t23_robust_p6,in_context_ts_hubh_lone,69.745,2026-10-14,ens_t23_robust_ts_p6_hubh_lone.csv
+ens_t23_B_tc1b75,in_context_ts_hubh_lone,68.997,2026-10-14,ens_t23_B_tc1b75_ts_hubh_lone.csv
+ens_t23_Brobust,in_context_ts_hubh_lone,68.997,2026-10-14,ens_t23_Brobust_ts_hubh_lone.csv
+ens_t23_ABrobust,in_context_ts_hubh_lone,69.747,2026-10-14,ens_t23_ABrobust_ts_hubh_lone.csv

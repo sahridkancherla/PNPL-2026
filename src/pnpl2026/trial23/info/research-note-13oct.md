@@ -243,4 +243,54 @@ each average then hub + lone, as for 70.68):
 Averaging over settings and seeds held or beat the best single setting;
 the base for trial 23's candidates can move to `ens_t23_robust_ts.csv`.
 
-Pending: the testbed check, the embed waves, the jobs.
+**Testbed alignment (14 Oct).** The others heard exactly subject 0's text,
+but playback paused differently: the onset offset is constant within a
+stretch of continuous playback and jumps 2-8 samples at the 1-3 s pauses
+(drifting up to ~1.6 s over a chapter). Exactness per constant-offset run:
+99.9-100% of words matched (one global offset had matched 1-20%).
+
+**Local gates (14 Oct) -- the cross-subject route does not carry words.**
+
+- Testbed, 12 others, 605 / 646 rows: every vote gained on ses-11 (+2.1
+  to +3.1) and LOST on ses-12 -- graph -3.90, SNF -0.49, LDA -1.29, product
+  -3.24 -- and more subjects did not help (3 / 6 / 12 all negative).
+  Neighbour purity of the residual features 0.063 against a base rate of
+  0.059 (raw 0.071): the others' 0.5 s windows identify words at chance once
+  timing is removed; the subjects do agree with each other a little
+  (split-half overlap 0.037 vs 0.012 on the holdout), but not on words.
+  P1/SNF/P3/P8a not submitted.
+- P2: encoder purity 0.064 vs residual 0.063 -- "passed" by 0.001, both at
+  chance (the 2x bar fails); its ses-12 vote gains (SNF +1.54, product
+  +0.27) follow ses-11 losses or near-zeros: noise. Not a real pass.
+- P6: no boundary gap on MOCHA / TheMoth: skipped, as the note says.
+- P8b: re-centring hurt everywhere -- the 70.68 recipe -4.51 on pooled test
+  (-6.51 validation), the plain mix -8.52 -- like BatchNorm re-estimation
+  before it. Not submitted.
+
+- P5: both priors chose weight 0. lm: every weight lowered pooled
+  validation (38.08 -> 37.70 at 0.1); on test Sherlock +0.7 but MOCHA -2.2
+  (the gate). em: identical at every weight -- the emission temperature is
+  0.273, the mix's single-trial posteriors are so diffuse that soft counts
+  carry no transition structure, and its PMI changes no ranking. The skip
+  model itself works (test AUC 0.961). Not submitted.
+
+**Board, 14 Oct.** `ens_t23_robustb` (robust + the 26-member mix with B
+inside) 70.849, a tie with robust; `ens_t23_robustwide` (robust + blend 0.5)
+70.182, -0.67: blend 0.5 is a weaker mix and pulls the average down; keep
+blends at 0.65 and above.
+
+**Board, 14 Oct (later).** P1 graph on robust 69.897 (-0.95) and P6 on
+robust 69.745 (-1.10): both lost, as their gates said. Seed set B through
+the same recipe: 68.997 at blend 0.75 and 68.997 for its blend average --
+1.7 below A (70.682) with the same models at other seeds. So part of A's
+public score is seed luck on 868 rows; the A + B average is the
+lower-variance file for the private ranking even if it scores below robust.
+
+A + B robust averaged (`ens_t23_ABrobust`): 69.747, between A (70.849) and
+B (68.997). A's 23 members were assembled over trials partly by public
+score; B is the same families at fresh seeds, so B's 69.0 is the unbiased
+public estimate of the recipe and A's 70.85 is optimistic. For the private
+ranking the A + B average is the lower-variance candidate.
+
+Pending: P7. P4 dropped: the graph vote lost on the board as its gate said,
+and MEG-XL's gate was worse.
