@@ -8,6 +8,9 @@ families, prediction, ensembling, transduction, hub correction).
 | want | go to |
 |---|---|
 | each proposal, its tool, gate, deviations, commands' order, checks, results | `research-note-13oct.md` |
+| the final nights: the 204M diagnosis, anneal, heads, tower, SAM, F0 fixed | `final-night-14oct.md`; where each member stands: `../cli/final_status.py` |
+| anneal and head-only training, SAM, per-word scoring | `../cli/anneal.py`, `../perword/sam.py`, `../perword/evaluation.py` |
+| another language model's target table; the tower weight | `../cli/build_lm_embeddings.py`; `--tower-weight` in predict and evaluate |
 | the testbed: shared audio check, labelled replica of the holdout | `../cli/testbed_check.py`, `../cli/testbed.py` |
 | P1/SNF/P3/P8a: residual features, votes, holdout candidates | `../crossfeatures.py`, `../crossvotes.py`, `../cli/cross_graph.py` |
 | P6: boundary features, fine-tune, diagnose and apply | `../boundary.py`, `../cli/finetune.py`, `../cli/boundary.py` |
@@ -17,7 +20,7 @@ families, prediction, ensembling, transduction, hub correction).
 | P4: MEG-XL frozen features | `../megxl.py`, `../cli/megxl_features.py` |
 | P8b: session re-centering | `../recentre.py`, `../cli/recentre.py`, `--recentre` in predict and embed |
 | dumps: chains38, isolated, onsets and table rows | `../cli/embed.py`, `chain_sequences` in `../data/sequences.py` |
-| jobs | `pbs/trial23_{embed,finetune,predict,cpu,lm,megxl}.pbs` |
-| lists | `configs/trial23/{members,fresh,lone,specialists}.txt` |
+| jobs | `pbs/trial23_{embed,finetune,predict,cpu,lm,megxl,anneal,lm_tables,tower}.pbs` |
+| lists | `configs/trial23/{members,fresh,lone,specialists,anneal,newmembers}.txt` |
 
 Trial 22's changes and results: `src/pnpl2026/trial22/info/route-to-73.md`.

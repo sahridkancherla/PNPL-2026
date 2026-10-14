@@ -39,6 +39,9 @@ onset at 0. That is exactly the form training items take.
                      (AdaBN), under either scaling. The megstate stem has
                      none, so for it this changes nothing; the per-word
                      encoder and the dascoli stem have ten. Adds "_bnadapt"
+    --tower-weight   trial 23, continuous runs with a word tower: the tower
+                     head's share of the combined score (0.5 is the plain
+                     average). Another value tags the run, 0.7 -> "<run>_tw07"
 
 ⚠️ ROW ORDERING IS THE WHOLE CONTRACT. Every prediction is written to its
 canonical `index`, never appended, and every row must be filled exactly once
@@ -56,6 +59,7 @@ import torch
 from scipy.signal import resample_poly
 
 from ...config import REPO_ROOT, SUBMISSIONS_DIR
+from ..config import tower_weight_suffix, with_tower_weight
 from ..data_processing.build_reference import IQR_FLOOR
 from ..families import load_any
 from ..lit import adapt_batch_norm
@@ -140,6 +144,13 @@ def parse_args():
         "--others-manifest",
         default="data/trial18_others/manifest.json",
         help="repo-relative; the other subjects' cache manifest, which orders the subject layers",
+    )
+    parser.add_argument(
+        "--tower-weight",
+        type=float,
+        default=None,
+        help="trial 23, continuous runs with a tower: the tower head's share (0.5 is the plain average); "
+             "another value names the run <run>_twNN",
     )
     return parser.parse_args()
 
@@ -578,7 +589,9 @@ def run_continuous(args, module, cfg, info, device):
     mode += ("_ts" if args.scaling == "training" else "") + ("_tta" if shifts != [0] else "")
     mode += f"_dtta{args.dropout_tta}" if args.dropout_tta > 0 else ""
     mode += "_rc" if args.recentre else ""
-    out_path = args.out or str(SUBMISSIONS_DIR / f"{cfg.run_name}{subject_suffix(args)}_{mode}.csv")
+    #trial 23: another tower weight is another member, named as its own run
+    run_label = cfg.run_name + tower_weight_suffix(args.tower_weight)
+    out_path = args.out or str(SUBMISSIONS_DIR / f"{run_label}{subject_suffix(args)}_{mode}.csv")
     SUBMISSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
     #both vocabularies by retrieval, each in its own column order
@@ -593,8 +606,13 @@ def main():
     device = torch.device(args.device or ("cuda" if torch.cuda.is_available() else "cpu"))
     module, cfg, info, family = load_any(args.ckpt, device, use_ema=not args.no_ema)
     if family == "perword":
+        if args.tower_weight is not None:
+            raise SystemExit("--tower-weight applies to continuous runs with a word tower; this one is per-word.")
         perword_holdout.run(args, module, cfg, info, device)
     else:
+        cfg = with_tower_weight(module, args.tower_weight)
+        if args.tower_weight is not None:
+            print(f"[predict] --tower-weight {args.tower_weight:g}: the tower's share of the combined score")
         run_continuous(args, module, cfg, info, device)
 
 

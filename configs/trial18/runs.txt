@@ -31,3 +31,4 @@ configs/trial18/k2_layer3.yaml 5
 configs/trial18/k18_layer18.yaml 3
 configs/trial18/k18_layer18.yaml 4
 configs/trial18/k18_layer18.yaml 5
+configs/trial18/f0_fixed.yaml 0

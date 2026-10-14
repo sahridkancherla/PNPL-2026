@@ -1,0 +1,64 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=64gb
+#PBS -l walltime=02:00:00
+#PBS -N pnpl-trial23-lm-tables
+#PBS -j oe
+#PBS -o logs/
+
+# Trial 23, final night, Recipe 2's targets: every word of the t5 table
+# encoded by two other language models' middle layers (cli.build_lm_embeddings),
+# then trial 16's hub check of both against t5. CPU only, ~20-40 min. From the
+# repo root:
+#
+#     qsub pbs/trial23_lm_tables.pbs
+#
+# Writes data/word_embeddings_gpt2medium_layer12.npz (GPT-2-medium, 1024 wide)
+# and data/word_embeddings_qwen15_layer14.npz (Qwen2.5-1.5B, 1536 wide); the
+# hub check prints to the log. Then lines 11-16 of configs/trial23/anneal.txt.
+#
+# ⚠️ Needs, from a LOGIN node first (outbound internet):
+#
+#   1. transformers aside from the project venv -- trial 10's $HOME/t5libs.
+#
+#   2. Both models' files in the Hugging Face cache. GPT-2-medium is there
+#      already (P5's lm prior); Qwen2.5-1.5B is ~3 GB:
+#        PYTHONPATH="$HOME/t5libs" .venv/bin/python -c "from huggingface_hub \
+#            import snapshot_download; snapshot_download('Qwen/Qwen2.5-1.5B', \
+#            allow_patterns=['*.json', '*.txt', '*.safetensors'])"
+#
+# ⚠️ Submit from the repo root. `-o logs/` is resolved against where qsub ran.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+# t5libs first: transformers lives there and nowhere else.
+export PYTHONPATH="$HOME/t5libs:$PWD/src"
+export PYTHONUNBUFFERED=1
+export UV_OFFLINE=1
+# Offline: a cache miss must fail at once rather than hang on a download.
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+# One thread per core this job was given.
+export OMP_NUM_THREADS=8
+
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.trial23_lm_tables.live.log"
+echo "live log: $LIVE_LOG"
+
+{
+    if [ ! -e data/word_embeddings_t5_all.npz ]; then
+        echo "[preflight] not on RDS: data/word_embeddings_t5_all.npz" >&2
+        exit 1
+    fi
+
+    # The project venv's python directly: `uv run` re-syncs the environment
+    # first, and nothing here should touch it.
+    .venv/bin/python -m pnpl2026.trial23.cli.build_lm_embeddings --model openai-community/gpt2-medium \
+        --out data/word_embeddings_gpt2medium_layer12.npz --layer 12
+    .venv/bin/python -m pnpl2026.trial23.cli.build_lm_embeddings --model Qwen/Qwen2.5-1.5B \
+        --out data/word_embeddings_qwen15_layer14.npz --layer 14
+
+    # Do the new tables' hub words differ from t5's? Informational: both heads train either way.
+    .venv/bin/python -m pnpl2026.trial16.cli.hub_check --reference data/word_embeddings_t5_all.npz \
+        --candidates data/word_embeddings_gpt2medium_layer12.npz data/word_embeddings_qwen15_layer14.npz
+} 2>&1 | tee "$LIVE_LOG"

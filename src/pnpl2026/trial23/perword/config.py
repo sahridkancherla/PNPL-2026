@@ -18,6 +18,16 @@ broad-track subjects (`cli/build_others.py`). Either one makes local
 validation unclean, so such a run trains a fixed number of epochs
 (`epochs_from` reads them off earlier runs) and keeps the last one.
 
+Trial 23's final recipes (`cli/anneal.py`), off by default:
+
+    schedule           "cosine" (every earlier run) or "one_minus_sqrt", the
+                       anneal's 1 - sqrt(progress) decay
+    freeze_batchnorm   every BatchNorm keeps its running statistics in training
+    freeze_backbone    the network runs as at inference (dropout off); only
+                       parameters left trainable by the caller learn
+    sam_rho            > 0 wraps AdamW in sharpness-aware minimisation
+                       (`sam.py`); needs precision "32" or "bf16-mixed"
+
 `input_norm` is an encoder argument and lives in `model_kwargs`. The dataclass
 is a superset of trial 10's, 13's and 15's configs, so their checkpoints'
 saved hyperparameters load here unchanged and run with one head.
@@ -48,6 +58,9 @@ PROTOCOLS = ("reference", "fragment", "sparse", "isolated", "chains", "chains38"
 #what the training set is cut by: whole sentences (shaped or not), or every
 #word alone for the lone-word specialist
 TRAINING_PROTOCOLS = ("reference", "isolated")
+
+#the learning rate's decay after warmup; trial 23's anneal uses the second
+SCHEDULES = ("cosine", "one_minus_sqrt")
 
 #the fields that define a protocol, reset to the defaults below at evaluation
 PROTOCOL_FIELDS = (
@@ -104,8 +117,12 @@ class Trial18Config(Config):
             trained (with any shaping), or "isolated", every training word
             alone with 1 s -- the lone-word specialist; no shaping then
         jitter_seconds (float): one-sided onset jitter, training only
-        warmup_fraction (float): fraction of steps spent warming up
-        min_lr (float): floor of the cosine decay
+        warmup_fraction (float): fraction of steps spent warming up; 0 is none
+        min_lr (float): floor of the decay
+        schedule (str): "cosine" or "one_minus_sqrt", the decay after warmup
+        freeze_batchnorm (bool): BatchNorm in eval mode during training
+        freeze_backbone (bool): the whole network in eval mode during training
+        sam_rho (float): SAM's neighbourhood radius; 0 is plain AdamW
         ema_decay (float): 0 disables the parameter EMA
         matmul_precision (str): torch.set_float32_matmul_precision
         precision (str): Lightning's precision, "32", "bf16-mixed", "16-mixed"
@@ -182,6 +199,12 @@ class Trial18Config(Config):
     ema_decay: float = 0.0
     matmul_precision: str = "high"
     precision: str = "32"
+
+    # --- trial 23: the anneal, head-only training, SAM ---
+    schedule: str = "cosine"
+    freeze_batchnorm: bool = False
+    freeze_backbone: bool = False
+    sam_rho: float = 0.0
 
     # --- Variant M: HDND's refinement on a frozen checkpoint ---
     refine_base: str = ""
@@ -268,6 +291,15 @@ class Trial18Config(Config):
             raise ValueError(f"second_loss_weight must be >= 0, got {self.second_loss_weight}")
         if self.precision not in ("32", "bf16-mixed", "16-mixed"):
             raise ValueError(f"precision must be '32', 'bf16-mixed' or '16-mixed', got {self.precision!r}")
+
+        #trial 23: the decay's shape, and SAM's two forward passes per step
+        if self.schedule not in SCHEDULES:
+            raise ValueError(f"schedule must be one of {SCHEDULES}, got {self.schedule!r}")
+        if self.sam_rho < 0:
+            raise ValueError(f"sam_rho must be >= 0, got {self.sam_rho}")
+        #⚠️ Lightning's GradScaler steps without a closure, and SAM needs one
+        if self.sam_rho > 0 and self.precision == "16-mixed":
+            raise ValueError("sam_rho > 0 needs precision '32' or 'bf16-mixed'; 16-mixed steps without a closure.")
 
         #all-data: subject 0's own partitions, train always among them
         known = {"train", "validation", "test"}

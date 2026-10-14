@@ -22,10 +22,14 @@
 #     recentre_reference     P8b: the training covariance (cli.recentre reference)
 #     recentre_check         P8b: with against without, both held-out partitions
 #     finish                 BASE through the hub correction and I3's lone rows -> <BASE stem>_hubh_lone.csv
-#     robust                 robust's recipe rebuilt from the 23 members minus EXCLUDE (a regex on run
+#     robust                 robust's recipe rebuilt from the 23 members plus INCLUDE (a regex on the
+#                            lines of configs/trial23/newmembers.txt) minus EXCLUDE (a regex on run
 #                            names): blends 0.65/0.75/0.9, and 0.75 with SPW seeds 3-5, averaged, then
 #                            finished -> submissions/ens_t23_<NAME>_robust_ts_hubh_lone.csv. About an hour.
 #                            e.g. qsub -v STEP=robust,EXCLUDE=trial18_n_,NAME=noN pbs/trial23_cpu.pbs
+#                                 qsub -v STEP=robust,INCLUDE=trial23_an_,NAME=anneal pbs/trial23_cpu.pbs
+#                            MEMBERS_FILE=configs/trial23/fresh.txt starts from set B instead (its SPW
+#                            is seeds 3-5 already, so its fourth mix repeats the 0.75 one).
 #
 # BASE is the holdout mix before the hub correction; default the 70.68
 # file's, submissions/ens_t22_tc1b75_ts.csv. STEP_ARGS adds anything else.
@@ -57,14 +61,36 @@ tool() {
     uv run --frozen python -m "pnpl2026.trial23.cli.$1" "${@:2}"
 }
 
-# robust's four transduced mixes without EXCLUDE's members, averaged, then hub + lone rows.
+# robust's four transduced mixes -- the members plus INCLUDE's new ones, minus EXCLUDE's --
+# averaged, then hub + lone rows.
 build_robust() {
-    local name="${NAME:?submit with -v STEP=robust,EXCLUDE=<regex>,NAME=<tag>}"
-    local runs alternative inputs pair
-    runs="$(echo $MEMBERS | tr ' ' '\n' | grep -v -E "${EXCLUDE:-^$}" | tr '\n' ' ')"
+    local name="${NAME:?submit with -v STEP=robust,NAME=<tag>[,INCLUDE=<regex>][,EXCLUDE=<regex>]}"
+    local base added runs alternative inputs pair run needed
+    base="$MEMBERS"
+    if [ -n "${MEMBERS_FILE:-}" ]; then
+        base="$(grep -v '^#' "$MEMBERS_FILE" | grep -v '^trial21_b' | tr '\n' ' ')"
+    fi
+    added=""
+    if [ -n "${INCLUDE:-}" ]; then
+        added="$(grep -v '^#' configs/trial23/newmembers.txt | grep -E "$INCLUDE" | tr '\n' ' ' || true)"
+        if [ -z "$added" ]; then
+            echo "[robust] INCLUDE=${INCLUDE} matches no line of configs/trial23/newmembers.txt" >&2
+            return 1
+        fi
+        #every new member needs its holdout CSV and its validation dump before an hour is spent
+        for run in $added; do
+            for needed in "submissions/${run}_in_context_ts.csv" "runs/${run}/dumps/reference_validation.npz"; do
+                if [ ! -e "$needed" ]; then
+                    echo "[robust] not on RDS: $needed" >&2
+                    return 1
+                fi
+            done
+        done
+    fi
+    runs="$(echo $base $added | tr ' ' '\n' | grep -v -E "${EXCLUDE:-^$}" | tr '\n' ' ')"
     #SPW's seeds 3-5 (trial 20) in place of 0-2, for the fourth mix
     alternative="$(echo $runs | tr ' ' '\n' | sed -e 's/^trial19_spw_s0$/trial20_spw_s3/' -e 's/^trial19_spw_s1$/trial20_spw_s4/' -e 's/^trial19_spw_s2$/trial20_spw_s5/' | tr '\n' ' ')"
-    echo "[robust] $(echo $runs | wc -w) members: $runs"
+    echo "[robust] $(echo $runs | wc -w) members (added: ${added:-none}): $runs"
     for pair in 65:0.65 75:0.75 90:0.9; do
         tool transduce --inputs $(for r in $runs; do printf 'submissions/%s_in_context_ts.csv ' "$r"; done) --runs $runs \
             --pull 1.0 --blend "${pair##*:}" --check 0 --holdout-dir data/holdout --force \

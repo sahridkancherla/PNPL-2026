@@ -1,0 +1,29 @@
+# Trial 23, final night: one cli.anneal run per non-comment line,
+# "<parent checkpoint> <run name> <mode> [cli.anneal arguments]".
+# Read by pbs/trial23_anneal.pbs; the n-th run is the n-th non-comment line.
+#
+#   1-5    Recipe 1: anneal + average, G2 s0-s2 and w1024 s0-s1
+#   6-10   Recipe 4: the same with SAM (precision 32, ~1 h each)
+#   11-13  Recipe 2: a GPT-2-medium head (layer 12) on frozen G2 s0-s2
+#   14-16  Recipe 2: a Qwen2.5-1.5B head (layer 14) on frozen G2 s0-s2
+#
+# Each line also leaves the un-averaged last epoch as a second member,
+# "last" joined to the run name's second word (trial23_an_g2_s0 ->
+# trial23_anlast_g2_s0). Lines 11-16 need the tables from
+# pbs/trial23_lm_tables.pbs first.
+runs/trial13_g2_s0/best.ckpt trial23_an_g2_s0 anneal
+runs/trial13_g2_s1/best.ckpt trial23_an_g2_s1 anneal
+runs/trial13_g2_s2/best.ckpt trial23_an_g2_s2 anneal
+runs/trial12_w1024_s0/best.ckpt trial23_an_w1024_s0 anneal
+runs/trial12_w1024_s1/best.ckpt trial23_an_w1024_s1 anneal
+runs/trial13_g2_s0/best.ckpt trial23_sam_g2_s0 anneal --sam
+runs/trial13_g2_s1/best.ckpt trial23_sam_g2_s1 anneal --sam
+runs/trial13_g2_s2/best.ckpt trial23_sam_g2_s2 anneal --sam
+runs/trial12_w1024_s0/best.ckpt trial23_sam_w1024_s0 anneal --sam
+runs/trial12_w1024_s1/best.ckpt trial23_sam_w1024_s1 anneal --sam
+runs/trial13_g2_s0/best.ckpt trial23_hg_g2_s0 head --head data/word_embeddings_gpt2medium_layer12.npz
+runs/trial13_g2_s1/best.ckpt trial23_hg_g2_s1 head --head data/word_embeddings_gpt2medium_layer12.npz
+runs/trial13_g2_s2/best.ckpt trial23_hg_g2_s2 head --head data/word_embeddings_gpt2medium_layer12.npz
+runs/trial13_g2_s0/best.ckpt trial23_hq_g2_s0 head --head data/word_embeddings_qwen15_layer14.npz
+runs/trial13_g2_s1/best.ckpt trial23_hq_g2_s1 head --head data/word_embeddings_qwen15_layer14.npz
+runs/trial13_g2_s2/best.ckpt trial23_hq_g2_s2 head --head data/word_embeddings_qwen15_layer14.npz

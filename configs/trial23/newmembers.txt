@@ -1,0 +1,54 @@
+# Trial 23, final night: every new member, one run name per line. Each has
+# submissions/<run>_in_context_ts.csv and runs/<run>/dumps/ once its job ran.
+# pbs/trial23_cpu.pbs's robust step adds the lines its INCLUDE regex matches:
+#
+#   trial23_an_       the five annealed members (Recipe 1)
+#   trial23_anlast_   their last epochs, un-averaged
+#   trial23_sam_      the five SAM anneals (Recipe 4); trial23_samlast_ theirs
+#   trial23_hg_       GPT-2-medium heads on G2 (Recipe 2); trial23_hglast_
+#   trial23_hq_       Qwen2.5-1.5B heads on G2 (Recipe 2); trial23_hqlast_
+#   _tw07             the six SPW seeds scored at tower weight 0.7 (Recipe 3)
+#   trial18_f0fixed   the 204M model on the fixed recipe
+#
+# Also readable by pbs/trial23_predict.pbs (LIST=configs/trial23/newmembers.txt)
+# for any per-word member's CSV again; not for the _tw07 lines, which are
+# scorings of the SPW checkpoints (pbs/trial23_tower.pbs).
+trial23_an_g2_s0
+trial23_an_g2_s1
+trial23_an_g2_s2
+trial23_an_w1024_s0
+trial23_an_w1024_s1
+trial23_anlast_g2_s0
+trial23_anlast_g2_s1
+trial23_anlast_g2_s2
+trial23_anlast_w1024_s0
+trial23_anlast_w1024_s1
+trial23_sam_g2_s0
+trial23_sam_g2_s1
+trial23_sam_g2_s2
+trial23_sam_w1024_s0
+trial23_sam_w1024_s1
+trial23_samlast_g2_s0
+trial23_samlast_g2_s1
+trial23_samlast_g2_s2
+trial23_samlast_w1024_s0
+trial23_samlast_w1024_s1
+trial23_hg_g2_s0
+trial23_hg_g2_s1
+trial23_hg_g2_s2
+trial23_hglast_g2_s0
+trial23_hglast_g2_s1
+trial23_hglast_g2_s2
+trial23_hq_g2_s0
+trial23_hq_g2_s1
+trial23_hq_g2_s2
+trial23_hqlast_g2_s0
+trial23_hqlast_g2_s1
+trial23_hqlast_g2_s2
+trial19_spw_s0_tw07
+trial19_spw_s1_tw07
+trial19_spw_s2_tw07
+trial20_spw_s3_tw07
+trial20_spw_s4_tw07
+trial20_spw_s5_tw07
+trial18_f0fixed_s0

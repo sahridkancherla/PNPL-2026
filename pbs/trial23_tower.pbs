@@ -1,0 +1,91 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=32gb:ngpus=1:gpu_type=RTX6000
+#PBS -l walltime=01:00:00
+#PBS -N pnpl-trial23-tower
+#PBS -j oe
+#PBS -o logs/
+
+# Trial 23, final night, Recipe 3: the six SPW seeds scored with the word
+# tower at another share of the combined score (WEIGHT, default 0.7; the
+# trained runs average the heads, 0.5). No training. Per seed: the
+# validation and test dumps and fragment scores at WEIGHT, the fragment score
+# at 0.5 beside it, and the holdout CSV. From the repo root:
+#
+#     qsub -J 1-6 pbs/trial23_tower.pbs                   SPW s0-s2, s3-s5 at 0.7
+#     qsub -J 1-6 -v WEIGHT=0.3 pbs/trial23_tower.pbs     another weight
+#     qsub -v RUN=<n> pbs/trial23_tower.pbs              one seed again
+#
+# Each becomes a member named <run>_tw07 (for 0.7): runs/<run>_tw07/dumps/,
+# runs/<run>_tw07/evaluation.json, submissions/<run>_tw07_in_context_ts.csv.
+# About 10-20 min each.
+#
+# ⚠️ Needs on RDS: runs/trial19_spw_s0..2 and runs/trial20_spw_s3..5,
+# data/trial10_reference/, data/holdout/, data/trial23_training_scaler.npz.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+export PYTHONUNBUFFERED=1
+export UV_OFFLINE=1 HF_HUB_OFFLINE=1
+
+INDEX="${PBS_ARRAY_INDEX:-${RUN:-}}"
+if [ -z "$INDEX" ]; then
+    echo "no seed chosen: submit with -J 1-6, or -v RUN=<1-6>" >&2
+    exit 1
+fi
+SEEDS=(trial19_spw_s0 trial19_spw_s1 trial19_spw_s2 trial20_spw_s3 trial20_spw_s4 trial20_spw_s5)
+if [ "$INDEX" -lt 1 ] || [ "$INDEX" -gt "${#SEEDS[@]}" ]; then
+    echo "RUN ${INDEX} is outside 1-${#SEEDS[@]}" >&2
+    exit 1
+fi
+MEMBER="${SEEDS[$((INDEX - 1))]}"
+WEIGHT="${WEIGHT:-0.7}"
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.tower23_${MEMBER}.live.log"
+echo "seed ${INDEX}: ${MEMBER} at tower weight ${WEIGHT}; live log: $LIVE_LOG"
+
+{
+    for needed in "runs/${MEMBER}/best.ckpt" data/trial10_reference/manifest.json data/trial23_training_scaler.npz \
+                  data/holdout/COMPETITION_HOLDOUT/subj00_holdout01_sentence.npz; do
+        if [ ! -e "$needed" ]; then
+            echo "[preflight] not on RDS: $needed" >&2
+            exit 1
+        fi
+    done
+
+    # The member's name, as cli.predict will write it: the run and the weight's tag.
+    TAG="$(uv run --frozen python -c "import sys; from pnpl2026.trial23.config import tower_weight_suffix; \
+print(tower_weight_suffix(float(sys.argv[1])))" "$WEIGHT")"
+    if [ -z "$TAG" ]; then
+        echo "WEIGHT ${WEIGHT} is the trained average: the member already exists" >&2
+        exit 1
+    fi
+
+    STAGED_CACHE="${TMPDIR:?not set -- submit with qsub}/trial10_reference"
+    SECONDS=0
+    cp -r data/trial10_reference "$STAGED_CACHE"
+    echo "[stage] cache copied in ${SECONDS}s"
+
+    # At WEIGHT, with the dumps the transduction reads; then at 0.5 on fragments, to compare.
+    uv run --frozen python -m pnpl2026.trial23.cli.evaluate --ckpt "runs/${MEMBER}/best.ckpt" --cache-dir "$STAGED_CACHE" \
+        --protocols reference fragment --num-workers 8 --dump --tower-weight "$WEIGHT" \
+        --out "runs/${MEMBER}${TAG}/evaluation.json"
+    uv run --frozen python -m pnpl2026.trial23.cli.evaluate --ckpt "runs/${MEMBER}/best.ckpt" --cache-dir "$STAGED_CACHE" \
+        --protocols fragment --num-workers 8 --out "runs/${MEMBER}${TAG}/evaluation_plain.json"
+    uv run --frozen python - "runs/${MEMBER}${TAG}" "$WEIGHT" <<'PYTHON'
+import json
+import sys
+from pathlib import Path
+
+# The fragment protocol at both weights, side by side.
+run_dir, weight = Path(sys.argv[1]), sys.argv[2]
+for name, label in (("evaluation_plain.json", "0.5"), ("evaluation.json", weight)):
+    results = json.loads((run_dir / name).read_text())["results"]["fragment"]
+    print(f"[tower] fragment BAcc@10 at tower weight {label}: validation {100 * results['validation']['bacc10']:.2f}  "
+          f"test {100 * results['test']['bacc10']:.2f}")
+PYTHON
+
+    uv run --frozen python -m pnpl2026.trial23.cli.predict --ckpt "runs/${MEMBER}/best.ckpt" --holdout-dir data/holdout \
+        --tower-weight "$WEIGHT"
+} 2>&1 | tee "$LIVE_LOG"

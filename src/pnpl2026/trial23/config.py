@@ -25,6 +25,11 @@ Trial 19's top-level fields, all with holdout-matched defaults:
     word_descriptions, tower_dim, tower_hidden, tower_anchor_weight,
     tower_score_mode      the word tower ("" = off)
 
+Trial 23's `tower_weight` (Recipe 3 of the final-night note) changes only how
+a trained run is SCORED: the tower head's share of the combined score. 0.5,
+the default, is the equal average every run was trained and scored with;
+`cli.predict` and `cli.evaluate` set another with `--tower-weight`.
+
 `second_embeddings` (Variant K's head) and the all-data switches are kept.
 Variant M's refiner is gone.
 
@@ -54,6 +59,9 @@ TRAINING_PROTOCOLS = ("reference", "isolated")
 
 #how onset markers are dropped in training; see data/dataset.py
 MARKER_DROP_MODES = ("scored", "random")
+
+#the tower head's share of a combined score: the plain average, as trained
+DEFAULT_TOWER_WEIGHT = 0.5
 
 #the fields that define a protocol, reset to the defaults below at evaluation
 PROTOCOL_FIELDS = (
@@ -141,6 +149,8 @@ class Trial23Config(Config):
             tower; 0 drops it
         tower_score_mode (str): "combine" averages the heads' z-scored
             scores; "tower" ranks by the tower alone
+        tower_weight (float): in "combine", the tower head's share; the
+            other heads split the rest equally. 0.5 is the plain average
         train_partitions (list): subject 0's pnpl partitions trained on;
             ["train", "validation", "test"] is all of subject 0
         others_cache_dir (str): the other subjects' cache, repo-relative; ""
@@ -220,6 +230,7 @@ class Trial23Config(Config):
     tower_hidden: int = 512
     tower_anchor_weight: float = 1.0
     tower_score_mode: str = "combine"
+    tower_weight: float = DEFAULT_TOWER_WEIGHT
 
     # --- all-data training: subject 0's every partition, the other subjects ---
     train_partitions: list = field(default_factory=lambda: ["train"])
@@ -320,6 +331,8 @@ class Trial23Config(Config):
             raise ValueError("tower_dim and tower_hidden must be > 0, tower_anchor_weight >= 0.")
         if self.tower_score_mode not in ("combine", "tower"):
             raise ValueError(f"tower_score_mode must be 'combine' or 'tower', got {self.tower_score_mode!r}")
+        if not 0.0 <= self.tower_weight <= 1.0:
+            raise ValueError(f"tower_weight must be in [0, 1], got {self.tower_weight}")
 
     @property
     def window_seconds(self):
@@ -441,3 +454,39 @@ def with_protocol_defaults(cfg):
     """
     defaults = Trial23Config()
     return replace(cfg, **{name: getattr(defaults, name) for name in PROTOCOL_FIELDS})
+
+
+def tower_weight_suffix(weight):
+    """The file-name tag of a tower weight: none at the default, 0.7 -> "_tw07".
+
+    ARGS:
+        weight (float or None): None is the default
+
+    RETURNS:
+        str
+    """
+    if weight is None or weight == DEFAULT_TOWER_WEIGHT:
+        return ""
+    #the digits of the weight, its point dropped: 0.7 -> 07, 0.65 -> 065
+    return "_tw" + format(weight, "g").replace(".", "")
+
+
+def with_tower_weight(module, weight):
+    """Score a trained continuous module with another tower share, in place.
+
+    ARGS:
+        module (LitTrialTwentyThree): with a word tower
+        weight (float or None): None leaves the module as it is
+
+    RETURNS:
+        the module's config after the change
+    """
+    if weight is None:
+        return module.cfg
+    if not module.cfg.has_tower:
+        raise SystemExit(f"--tower-weight needs a run with a word tower; {module.cfg.run_name} has none.")
+    if module.cfg.tower_score_mode != "combine":
+        raise SystemExit(f"--tower-weight weighs combined heads; {module.cfg.run_name} ranks by the tower alone.")
+    #a new config: every later read of the module's cfg sees the weight
+    module.cfg = replace(module.cfg, tower_weight=float(weight))
+    return module.cfg

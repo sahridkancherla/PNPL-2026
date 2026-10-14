@@ -24,6 +24,14 @@ judged on identical sequences.
     --bn-adapt   additionally score each protocol after re-estimating the
                  BatchNorm statistics on that protocol's own inputs (AdaBN;
                  inputs only, never a label), as `<protocol>+bn`
+    --tower-weight   trial 23, a continuous run with a word tower: the tower
+                 head's share of the combined score (0.5 is the plain
+                 average). Give it an --out of its own, e.g.
+                 runs/<run>_tw07/evaluation.json, so its dumps sit there
+
+Trial 23: a per-word checkpoint (trials 10-18, `cli.anneal`'s) is scored by
+`perword.evaluation`, the same protocols and the same dumps; the model name
+in the checkpoint decides (`families.py`), as in `cli.predict`.
 
 Writes `evaluation.json` beside the checkpoint unless --out says otherwise.
 Needs only trial 10's cache and the checkpoint -- no t5 table.
@@ -42,9 +50,11 @@ import torch
 from torch.utils.data import DataLoader
 
 from ...metrics import balanced_topk_accuracy
-from ..config import PROTOCOL_FIELDS, PROTOCOLS, Trial23Config, with_protocol_defaults
+from ..config import PROTOCOL_FIELDS, PROTOCOLS, Trial23Config, with_protocol_defaults, with_tower_weight
 from ..data import build_partition, collate_items
+from ..families import checkpoint_model_name, family_of
 from ..lit import VOCABULARY_SIZE, adapt_batch_norm, load_trained
+from ..perword import evaluation as perword_evaluation
 
 #the competition paper's Table 1, d'Ascoli reference, standard test split
 PAPER_REFERENCE = {"bacc10": 0.7323, "bacc1": 0.2560, "moses_bacc10": 0.8360}
@@ -88,6 +98,12 @@ def parse_args():
     parser.add_argument("--dump", action="store_true", help="write per-word scores to dumps/ beside the JSON")
     parser.add_argument("--bn-adapt", action="store_true", help="also score after re-estimating BatchNorm")
     parser.add_argument("--no-ema", action="store_true", help="score the live weights, not the average")
+    parser.add_argument(
+        "--tower-weight",
+        type=float,
+        default=None,
+        help="trial 23, continuous runs with a tower: the tower head's share (0.5 is the plain average)",
+    )
     return parser.parse_args()
 
 
@@ -214,8 +230,9 @@ def evaluate_checkpoint(
     use_ema=True,
     dump_dir=None,
     bn_adapt=False,
+    tower_weight=None,
 ):
-    """Score one checkpoint on every partition under every protocol.
+    """Score one continuous checkpoint on every partition under every protocol.
 
     ARGS:
         checkpoint_path (Path or str)
@@ -228,12 +245,16 @@ def evaluate_checkpoint(
         use_ema (bool): averaged weights when the checkpoint has them
         dump_dir (Path or None): write per-token dumps here
         bn_adapt (bool): also score after AdaBN, per protocol and partition
+        tower_weight (float or None): the tower head's share; None as trained
 
     RETURNS:
         dict, JSON-ready
     """
     device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
     module, cfg, info = load_trained(checkpoint_path, device, use_ema)
+
+    #trial 23: the scoring rule set on the module, which every score reads
+    cfg = with_tower_weight(module, tower_weight)
 
     #⚠️ every run judged on this trial's protocol settings, not its own
     cfg = with_protocol_defaults(cfg)
@@ -282,6 +303,7 @@ def evaluate_checkpoint(
         "seed": cfg.seed,
         "epoch": info["epoch"],
         "global_step": info["global_step"],
+        "tower_weight": cfg.tower_weight if cfg.has_tower else None,
         "protocol_settings": {name: getattr(cfg, name) for name in PROTOCOL_FIELDS},
         "paper_reference_test": PAPER_REFERENCE,
         "results": results,
@@ -301,11 +323,10 @@ def format_score(value):
 
 
 def main():
-    """Score a checkpoint and write evaluation.json (and dumps, if asked)."""
+    """Score a checkpoint of either family and write evaluation.json (and dumps, if asked)."""
     args = parse_args()
     out_path = Path(args.out) if args.out else Path(args.ckpt).parent / "evaluation.json"
-    report = evaluate_checkpoint(
-        args.ckpt,
+    settings = dict(
         cache_dir=args.cache_dir,
         partitions=tuple(args.partitions),
         protocols=tuple(args.protocols),
@@ -316,6 +337,14 @@ def main():
         dump_dir=out_path.parent / "dumps" if args.dump else None,
         bn_adapt=args.bn_adapt,
     )
+
+    #the checkpoint's model name decides the family, as in cli.predict
+    if family_of(checkpoint_model_name(args.ckpt)) == "perword":
+        if args.tower_weight is not None:
+            raise SystemExit("--tower-weight applies to continuous runs with a word tower; this one is per-word.")
+        report = perword_evaluation.evaluate_checkpoint(args.ckpt, **settings)
+    else:
+        report = evaluate_checkpoint(args.ckpt, tower_weight=args.tower_weight, **settings)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"[evaluate] wrote {out_path}")

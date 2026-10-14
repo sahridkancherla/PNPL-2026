@@ -19,6 +19,8 @@ Trial 16's Variant K (kept, off by default): `second_head` adds a second linear 
 word vector, `embedding_second`, trained against a second target table (an
 early t5 layer). It is always a Linear, even at d_model 1024, so the two
 heads never share weights. Off by default; earlier checkpoints load without it.
+Trial 23: `second_embed_dim` sets its width when the second table is not
+1024 wide (Qwen2.5-1.5B's 1536); None keeps the first head's.
 
 Trial 18's Variant M (off by default): `refine` adds `PyramidRefiner`, HDND's
 bounded correction of `embedding` from two conv layers' pooled outputs
@@ -70,6 +72,7 @@ class ReferenceNet(nn.Module):
         refine=None,
         n_subjects=1,
         boundary_features=False,
+        second_embed_dim=None,
         **encoder_kwargs,
     ):
         """
@@ -94,6 +97,8 @@ class ReferenceNet(nn.Module):
                 gaps (`..boundary`) mapped into its word vector before the
                 sentence transformer, zero-initialised so a fine-tune starts
                 as its parent exactly
+            second_embed_dim (int or None): the second head's target width;
+                None is `embed_dim`
             **encoder_kwargs: to WordEncoder -- spatial, positions, pca, hidden...
         """
         super().__init__()
@@ -129,8 +134,9 @@ class ReferenceNet(nn.Module):
         #only a narrower transformer needs a map to the t5 width
         self.project = nn.Identity() if d_model == embed_dim else nn.Linear(d_model, embed_dim)
 
-        #Variant K: the same word vector, mapped into the second target space
-        self.project_second = nn.Linear(d_model, embed_dim) if second_head else None
+        #Variant K: the same word vector, mapped into the second target space,
+        #which trial 23's language-model tables make wider than t5's
+        self.project_second = nn.Linear(d_model, second_embed_dim or embed_dim) if second_head else None
 
         #Variant M: a bounded correction from chosen conv layers' outputs
         self.refiner = None
@@ -176,8 +182,8 @@ class ReferenceNet(nn.Module):
             dict:
                 "words" : [N, d_model] - the encoder's vectors
                 "embedding" : [N, embed_dim] - unnormalised, compared by cosine
-                "embedding_second" : [N, embed_dim] - the second head's,
-                    present only with second_head
+                "embedding_second" : [N, second_embed_dim] - the second
+                    head's, present only with second_head
                 with the refiner, "embedding" is the refined prediction and
                 "embedding_base" [N, embed_dim] the base's at unit length;
                 "delta" [N, embed_dim], "centre" [1, embed_dim] and

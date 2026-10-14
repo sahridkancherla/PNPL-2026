@@ -1,0 +1,27 @@
+# F0-fixed (trial 23's final night) -- the paper's 16 x 1024 x 16 transformer
+# (204M) on G2's recipe, with the four fixes the diagnosis asks for
+# (src/pnpl2026/trial23/info/final-night-14oct.md):
+#
+#   lr 1e-5         the organisers' number for this size (73.23 on test);
+#                   ours, 1e-4, memorised from epoch 11 (train loss 5.0 -> 1.1,
+#                   validation 69.9 -> 63.4 in ten epochs)
+#   dropout 0.1     feed-forward dropout in the transformer, 0 before
+#   EMA 0.999       validation and best.ckpt on the averaged weights
+#   fragments 0.4   with trial18.yaml's isolated 0.1: half of every epoch
+#                   holdout-shaped, as trial 13 found pays
+#
+# Patience 8 over a 50-epoch cosine. ~4 min per epoch on an RTX6000 at
+# 16-mixed: submit with -l walltime=08:00:00 (pbs/trial18.pbs asks for 4 h).
+run_name: trial18_f0fixed
+
+model_kwargs:
+  d_model: 1024
+  sentence_depth: 16
+  n_heads: 16
+  dropout: 0.1
+
+lr: 1.0e-5
+ema_decay: 0.999
+fragment_p: 0.4
+patience: 8
+max_epochs: 50

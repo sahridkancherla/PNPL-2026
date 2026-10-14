@@ -1,0 +1,96 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=64gb:ngpus=1:gpu_type=RTX6000
+#PBS -l walltime=02:00:00
+#PBS -N pnpl-trial23-anneal
+#PBS -j oe
+#PBS -o logs/
+
+# Trial 23, final night: one cli.anneal run per non-comment line of
+# configs/trial23/anneal.txt -- train, average, score against the parent --
+# then the holdout CSV of both members it leaves (the average, and the last
+# epoch alone). From the repo root:
+#
+#     qsub -J 1-5 pbs/trial23_anneal.pbs
+#         Recipe 1: anneal + average, G2 s0-s2 and w1024 s0-s1 (~30-40 min each)
+#     qsub -J 11-16 pbs/trial23_anneal.pbs
+#         Recipe 2: the GPT-2 and Qwen heads on frozen G2, once
+#         pbs/trial23_lm_tables.pbs has written both tables (~20-30 min each)
+#     qsub -l walltime=03:00:00 -J 6-10 pbs/trial23_anneal.pbs
+#         Recipe 4: the SAM anneals, two passes per step at precision 32 (~1-1.5 h)
+#     qsub -v RUN=<n>,FORCE=1 pbs/trial23_anneal.pbs
+#         one line again, over what a killed run left
+#
+# Writes runs/<run>/ (best.ckpt, anneal.json with the verdict against the
+# parent, evaluation.json, dumps/) and runs/<run's last epoch>/; CSVs land in
+# submissions/<run>_in_context_ts.csv.
+#
+# ⚠️ Needs on RDS: the parents' checkpoints, data/trial10_reference/,
+# data/word_embeddings_t5_all.npz, data/holdout/,
+# data/trial23_training_scaler.npz; lines 11-16 their table in data/.
+# Nothing downloads.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+export PYTHONUNBUFFERED=1
+export UV_OFFLINE=1 HF_HUB_OFFLINE=1
+
+INDEX="${PBS_ARRAY_INDEX:-${RUN:-}}"
+LIST="${LIST:-configs/trial23/anneal.txt}"
+if [ -z "$INDEX" ]; then
+    echo "no run chosen: submit with -J <range>, or -v RUN=<line of ${LIST}>" >&2
+    exit 1
+fi
+
+# Comment lines do not count: the n-th run is the n-th non-comment line.
+LINE="$(grep -v '^#' "$LIST" | sed -n "${INDEX}p")"
+read -r PARENT RUN_NAME MODE EXTRA <<< "$LINE"
+if [ -z "${MODE:-}" ]; then
+    echo "line ${INDEX} of ${LIST} is not '<parent> <run name> <mode> [arguments]'" >&2
+    exit 1
+fi
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.anneal23_${RUN_NAME}.live.log"
+echo "run ${INDEX} of ${LIST}: ${RUN_NAME} (${MODE} on ${PARENT}) ${EXTRA:-}; live log: $LIVE_LOG"
+
+{
+    # Every input in the first minute, not after the training.
+    NEEDED=("$PARENT" data/trial10_reference/manifest.json data/word_embeddings_t5_all.npz
+            data/trial23_training_scaler.npz data/holdout/COMPETITION_HOLDOUT/subj00_holdout01_sentence.npz)
+    # A head's table is the argument after --head.
+    read -r -a WORDS <<< "${EXTRA:-}"
+    for position in "${!WORDS[@]}"; do
+        if [ "${WORDS[$position]}" = "--head" ]; then
+            NEEDED+=("${WORDS[$((position + 1))]}")
+        fi
+    done
+    for needed in "${NEEDED[@]}"; do
+        if [ ! -e "$needed" ]; then
+            echo "[preflight] not on RDS: $needed" >&2
+            exit 1
+        fi
+    done
+    uv run --frozen python -c "import sys, torch; n = torch.cuda.device_count(); sys.exit(0 if n == 1 else f'[preflight] torch sees {n} GPUs; this job asked for 1.')"
+
+    # The windows are read all over the recordings: stage the cache locally.
+    STAGED_CACHE="${TMPDIR:?not set -- submit with qsub}/trial10_reference"
+    SECONDS=0
+    cp -r data/trial10_reference "$STAGED_CACHE"
+    echo "[stage] cache copied in ${SECONDS}s"
+
+    FORCE_FLAG=""
+    if [ "${FORCE:-0}" = "1" ]; then
+        FORCE_FLAG="--force"
+    fi
+    # shellcheck disable=SC2086
+    uv run --frozen python -m pnpl2026.trial23.cli.anneal --parent "$PARENT" --run-name "$RUN_NAME" --mode "$MODE" \
+        --cache-dir "$STAGED_CACHE" --num-workers 8 $FORCE_FLAG ${EXTRA:-}
+
+    # The second member's name, as cli.anneal wrote it.
+    FALLBACK="$(uv run --frozen python -c "import json, sys; print(json.load(open(sys.argv[1]))['fallback'])" \
+        "runs/${RUN_NAME}/anneal.json")"
+    for member in "$RUN_NAME" "$FALLBACK"; do
+        uv run --frozen python -m pnpl2026.trial23.cli.predict --ckpt "runs/${member}/best.ckpt" --holdout-dir data/holdout
+    done
+} 2>&1 | tee "$LIVE_LOG"

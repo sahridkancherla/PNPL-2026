@@ -48,6 +48,14 @@ only the refiner learns while the base runs exactly as at inference. Loss:
 `calibrate_refiner` fills its standardisation statistics from training
 batches before it trains; `strength_curve` scores validation at each
 strength once it has.
+
+Trial 23's final recipes (`cli/anneal.py`) add three switches to training:
+`freeze_batchnorm` keeps every BatchNorm on its running statistics,
+`freeze_backbone` runs the whole network as at inference (only the
+parameters the caller left trainable learn), and `sam_rho` wraps AdamW in
+SAM, which evaluates every batch twice -- the second pass, at perturbed
+weights, is neither logged nor stored. `schedule` "one_minus_sqrt" decays
+the rate as 1 - sqrt(progress).
 """
 
 from __future__ import annotations
@@ -65,6 +73,7 @@ from .config import Trial18Config
 from .data.dataset import load_manifest
 from .losses import semantic_logits, siglip_loss
 from .models import T5_WIDTH, build_model
+from .sam import SAM
 
 #SigLIP's initialisation: t = 10, b = -10, per the paper
 INITIAL_LOG_SCALE = math.log(10.0)
@@ -265,6 +274,8 @@ class LitTrialEighteen(L.LightningModule):
             positions=spatial.get("positions"),
             pca=spatial.get("pca"),
             second_head=cfg.has_second_head,
+            #the second head as wide as its own table, which need not be t5's
+            second_embed_dim=self.primary_table_second.shape[1] if cfg.has_second_head else None,
             refine=cfg.refine_settings(),
             n_subjects=cfg.n_subjects,
             **cfg.model_kwargs,
@@ -284,6 +295,9 @@ class LitTrialEighteen(L.LightningModule):
 
         #Variant M: set by `freeze_base`, after the base's weights are loaded
         self.base_frozen = False
+
+        #SAM runs each batch twice; the batch index tells the second pass apart
+        self._last_train_batch = None
 
         #⚠️ NOT named `_buffers`, which is nn.Module's own registry
         #"primary_first" is the first head alone, filled only with two heads
@@ -310,7 +324,12 @@ class LitTrialEighteen(L.LightningModule):
                           boundary=batch.get("boundary"))
 
     def on_fit_start(self):
-        """Build the EMA -- or move a restored one -- onto the module's device."""
+        """Apply the frozen modes; build the EMA -- or move a restored one -- onto the module's device."""
+        #⚠️ Lightning 2.6 never calls train() itself, only keeps each module's
+        #mode around validation: the freezes must be in place before fit
+        if self.cfg.freeze_batchnorm or self.cfg.freeze_backbone:
+            self.train(True)
+
         if self.cfg.ema_decay > 0 and self.ema is None:
             self.ema = WeightEMA(self.model, self.cfg.ema_decay)
 
@@ -359,7 +378,10 @@ class LitTrialEighteen(L.LightningModule):
         self.train(self.training)
 
     def train(self, mode=True):
-        """Training mode, except a frozen base's BatchNorm and dropout, kept as at inference.
+        """Training mode, except what is frozen, kept as at inference.
+
+        Variant M's frozen base, trial 23's frozen BatchNorm (the anneal) and
+        frozen backbone (head-only training) all run in eval mode.
 
         ARGS:
             mode (bool): True for training
@@ -368,11 +390,23 @@ class LitTrialEighteen(L.LightningModule):
             self
         """
         super().train(mode)
+        if not mode:
+            return self
 
         #running statistics, not batch ones, and no dropout, in the frozen part
-        if self.base_frozen and mode:
+        if self.base_frozen:
             self.model.eval()
             self.model.refiner.train()
+
+        #the anneal: every BatchNorm keeps the parent's running statistics
+        if self.cfg.freeze_batchnorm:
+            for layer in self.modules():
+                if isinstance(layer, nn.modules.batchnorm._BatchNorm):
+                    layer.eval()
+
+        #head-only: the backbone's features exactly as at inference, dropout off
+        if self.cfg.freeze_backbone:
+            self.model.eval()
         return self
 
     @torch.no_grad()
@@ -527,12 +561,14 @@ class LitTrialEighteen(L.LightningModule):
         primary_second, moses_second = self.candidate_logits_second(out["embedding_second"])
         return combine_heads(primary, primary_second), combine_heads(moses, moses_second)
 
-    def _step(self, batch, stage):
+    def _step(self, batch, stage, record=True):
         """Shared body of the training and validation steps.
 
         ARGS:
             batch (dict): from `collate_tokens`
             stage (str): "train" or "val", the metric prefix
+            record (bool): log the losses and keep the scores for the epoch's
+                metrics; False for SAM's second pass over the same batch
 
         RETURNS:
             loss : scalar tensor
@@ -582,6 +618,10 @@ class LitTrialEighteen(L.LightningModule):
                 loss_ret = loss
                 loss_kl, loss_pair = self.refinement_losses(out, batch, has_target)
                 loss = loss_ret + self.cfg.refine_kl_weight * loss_kl + self.cfg.refine_pair_weight * loss_pair
+
+        #SAM's second pass is at perturbed weights: its numbers describe no model
+        if not record:
+            return loss
         self.log(f"{stage}/loss", loss, prog_bar=True, on_epoch=True, batch_size=n_targets)
         if refining:
             self.log(f"{stage}/loss_ret", loss_ret, on_epoch=True, batch_size=n_targets)
@@ -612,8 +652,18 @@ class LitTrialEighteen(L.LightningModule):
         return loss
 
     def training_step(self, batch, batch_idx):
-        """One optimiser step's loss; the metrics accumulate per epoch."""
-        return self._step(batch, "train")
+        """One optimiser step's loss; the metrics accumulate per epoch.
+
+        SAM calls this twice per batch through the closure; the second call,
+        same batch index, is not recorded.
+        """
+        repeat = batch_idx == self._last_train_batch
+        self._last_train_batch = batch_idx
+        return self._step(batch, "train", record=not repeat)
+
+    def on_train_epoch_start(self):
+        """Forget the last batch index: a new epoch counts from 0 again."""
+        self._last_train_batch = None
 
     def on_train_batch_end(self, outputs, batch, batch_idx):
         """Fold the post-step weights into the EMA."""
@@ -698,34 +748,45 @@ class LitTrialEighteen(L.LightningModule):
     # -- optimiser --------------------------------------------------------
 
     def configure_optimizers(self):
-        """AdamW with linear warmup into a cosine decay, as the reference.
+        """AdamW (or SAM around it) with linear warmup into a decay, cosine as the reference.
 
         RETURNS:
             dict: optimiser plus a per-step scheduler
         """
-        #Variant M: a frozen base hands the optimiser the refiner alone
+        #Variant M and head-only training hand the optimiser what is unfrozen
         trainable = [parameter for parameter in self.parameters() if parameter.requires_grad]
-        optimiser = torch.optim.AdamW(trainable, lr=self.cfg.lr, weight_decay=self.cfg.weight_decay)
+        if self.cfg.sam_rho > 0:
+            optimiser = SAM(trainable, torch.optim.AdamW, rho=self.cfg.sam_rho, lr=self.cfg.lr,
+                            weight_decay=self.cfg.weight_decay)
+        else:
+            optimiser = torch.optim.AdamW(trainable, lr=self.cfg.lr, weight_decay=self.cfg.weight_decay)
 
-        #estimated_stepping_batches accounts for max_epochs, so the cosine
+        #estimated_stepping_batches accounts for max_epochs, so the decay
         #finishes at the end of the run
         total_steps = max(int(self.trainer.estimated_stepping_batches), 1)
-        warmup_steps = max(int(total_steps * self.cfg.warmup_fraction), 1)
-        floor = self.cfg.min_lr / self.cfg.lr
+        #warmup_fraction 0 is none: the anneal starts at its peak
+        warmup_steps = max(int(total_steps * self.cfg.warmup_fraction), 1) if self.cfg.warmup_fraction > 0 else 0
+        #a zero rate (a check that nothing moves) has no floor to scale to
+        floor = self.cfg.min_lr / self.cfg.lr if self.cfg.lr > 0 else 0.0
+        one_minus_sqrt = self.cfg.schedule == "one_minus_sqrt"
 
         def scale(step):
             """Multiplier on the peak learning rate at `step`."""
             if step < warmup_steps:
                 return (step + 1) / warmup_steps
 
-            #cosine from 1 down to `floor` over what remains
+            #from 1 down to `floor` over what remains: cosine, or 1 - sqrt
             progress = min((step - warmup_steps) / max(total_steps - warmup_steps, 1), 1.0)
+            if one_minus_sqrt:
+                return floor + (1 - floor) * (1 - math.sqrt(progress))
             return floor + (1 - floor) * 0.5 * (1 + math.cos(math.pi * progress))
 
         scheduler = torch.optim.lr_scheduler.LambdaLR(optimiser, scale)
         print(
-            f"[optim] AdamW lr {self.cfg.lr:g} wd {self.cfg.weight_decay:g}, {warmup_steps} warmup "
-            f"steps of {total_steps}, cosine to {self.cfg.min_lr:g}"
+            f"[optim] {'SAM (rho ' + format(self.cfg.sam_rho, 'g') + ') around ' if self.cfg.sam_rho > 0 else ''}"
+            f"AdamW lr {self.cfg.lr:g} wd {self.cfg.weight_decay:g}, {warmup_steps} warmup steps of {total_steps}, "
+            f"{self.cfg.schedule} to {self.cfg.min_lr:g}; {sum(parameter.numel() for parameter in trainable):,} "
+            f"trainable parameters"
         )
         return {
             "optimizer": optimiser,

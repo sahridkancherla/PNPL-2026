@@ -47,7 +47,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ..metrics import balanced_topk_accuracy
-from .config import Trial23Config
+from .config import DEFAULT_TOWER_WEIGHT, Trial23Config
 from .data.dataset import load_manifest
 from .losses import semantic_logits, siglip_loss
 from .models import T5_WIDTH, WordTower, build_model, step_label_indices
@@ -118,7 +118,7 @@ def standardise_rows(scores):
     return centred / safe, spread
 
 
-def combine_heads(*heads):
+def combine_heads(*heads, weights=None):
     """Several heads' scores as one set.
 
     The ensemble script's rule: z-score each head per row, average. The result
@@ -127,14 +127,20 @@ def combine_heads(*heads):
 
     ARGS:
         *heads (torch.Tensor): each [N, n_candidates]
+        weights (list or None): one share per head, summing to 1; None is
+            the plain average, computed exactly as before trial 23
 
     RETURNS:
         [N, n_candidates]
     """
     standardised, spreads = zip(*(standardise_rows(head) for head in heads))
+    spread = torch.stack(spreads, dim=0).mean(dim=0)
 
     #dim=0 is the head axis
-    return torch.stack(standardised, dim=0).mean(dim=0) * torch.stack(spreads, dim=0).mean(dim=0)
+    if weights is None:
+        return torch.stack(standardised, dim=0).mean(dim=0) * spread
+    shares = torch.tensor(weights, dtype=standardised[0].dtype, device=standardised[0].device).view(-1, 1, 1)
+    return (torch.stack(standardised, dim=0) * shares).sum(dim=0) * spread
 
 
 class WeightEMA:
@@ -455,7 +461,8 @@ class LitTrialTwentyThree(L.LightningModule):
             primary : [N, 50], moses : [N, 50] - with one head, exactly
             `candidate_logits`; with several, their row-standardised scores
             averaged, rescaled to their mean spread; with `tower_score_mode`
-            "tower", the tower head alone
+            "tower", the tower head alone. `tower_weight` other than 0.5
+            gives the tower that share of the average (trial 23)
         """
         primary, moses = self.candidate_logits(out["embedding"])
         primaries, moseses = [primary], [moses]
@@ -471,7 +478,23 @@ class LitTrialTwentyThree(L.LightningModule):
             moseses.append(moses_tower)
         if len(primaries) == 1:
             return primary, moses
-        return combine_heads(*primaries), combine_heads(*moseses)
+        weights = self.head_weights(len(primaries))
+        return combine_heads(*primaries, weights=weights), combine_heads(*moseses, weights=weights)
+
+    def head_weights(self, n_heads):
+        """Each scoring head's share of the combined score, the tower's last.
+
+        ARGS:
+            n_heads (int): the scoring heads, the tower among them if any
+
+        RETURNS:
+            list or None - None (the plain average) without a tower or at the
+            default weight; else the tower `tower_weight`, the rest equally
+        """
+        if not self.cfg.has_tower or self.cfg.tower_weight == DEFAULT_TOWER_WEIGHT:
+            return None
+        rest = (1.0 - self.cfg.tower_weight) / (n_heads - 1)
+        return [rest] * (n_heads - 1) + [self.cfg.tower_weight]
 
     # -- the step ---------------------------------------------------------
 
