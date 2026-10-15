@@ -265,6 +265,8 @@ class LitTrialEighteen(L.LightningModule):
             positions=spatial.get("positions"),
             pca=spatial.get("pca"),
             second_head=cfg.has_second_head,
+            #the second head as wide as its own table, which need not be t5's
+            second_embed_dim=self.primary_table_second.shape[1] if cfg.has_second_head else None,
             refine=cfg.refine_settings(),
             n_subjects=cfg.n_subjects,
             **cfg.model_kwargs,

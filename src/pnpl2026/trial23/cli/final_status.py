@@ -13,12 +13,21 @@ One row per line of configs/trial23/newmembers.txt:
 
 Then the EXCLUDE regex that leaves the dropped members out, and which
 groups are complete enough for the robust step's INCLUDE.
+
+    --exclude-below   print ONLY an EXCLUDE regex (one line): the members
+                      anneal.json dropped, plus every other member whose
+                      fragment BAcc@10 (mean of validation and test) sits more
+                      than --margin points below the --reference-runs' mean.
+                      "^$" when nothing is excluded. The robust step's SANITY=1
+                      reads it (pbs/trial23_cpu.pbs); members without a score
+                      pass (All-0's scores are not clean, and are not judged)
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 
 from ...config import REPO_ROOT, RUNS_DIR, SUBMISSIONS_DIR
@@ -40,7 +49,61 @@ def parse_args():
     parser.add_argument("--members", default="configs/trial23/newmembers.txt", help="repo-relative")
     parser.add_argument("--runs-dir", default=None, help="default runs/; tests point elsewhere")
     parser.add_argument("--submissions-dir", default=None, help="default submissions/")
+    parser.add_argument("--exclude-below", action="store_true",
+                        help="print only the EXCLUDE regex of the members failing the sanity filter")
+    parser.add_argument("--margin", type=float, default=1.0, help="--exclude-below: BAcc@10 points below the reference")
+    parser.add_argument("--reference-runs", nargs="+", default=None,
+                        help="--exclude-below: run directories whose fragment scores' mean is the reference")
     return parser.parse_args()
+
+
+def fragment_mean(pair):
+    """The mean of validation and test BAcc@10, in points, or None.
+
+    ARGS:
+        pair (tuple or None): from `fragment_pair`
+
+    RETURNS:
+        float or None
+    """
+    return None if pair is None else 0.5 * (pair[0] + pair[1])
+
+
+def exclude_regex(members, runs_dir, annealed, reference_runs, margin):
+    """The EXCLUDE regex of the members that fail the sanity filter.
+
+    A member anneal.json judged keeps its verdict; any other member with a
+    fragment score more than `margin` points below the reference runs' mean
+    is excluded. A member without a score passes.
+
+    ARGS:
+        members (list): run names
+        runs_dir (Path)
+        annealed (dict): from `anneal_records`
+        reference_runs (list or None): run directories, e.g. G2's three seeds
+        margin (float): points
+
+    RETURNS:
+        str: anchored names joined by |, or "^$" when nothing is excluded
+    """
+    #the references as anneal.json scored them, under this trial's protocol: a parent's
+    #own evaluation.json may come from an older protocol and not compare
+    parents = parent_scores(runs_dir)
+    references = [fragment_mean(parents.get(Path(run).name)) for run in reference_runs or []]
+    references = [value for value in references if value is not None]
+    threshold = sum(references) / len(references) - margin if references else None
+
+    excluded = []
+    for member in members:
+        #anneal.json already compared these with their own parent
+        if member in annealed:
+            if annealed[member][2] == "drop":
+                excluded.append(member)
+            continue
+        mine = fragment_mean(fragment_pair(read_json(runs_dir / member / "evaluation.json")))
+        if mine is not None and threshold is not None and mine < threshold:
+            excluded.append(member)
+    return "|".join(f"^{re.escape(member)}$" for member in excluded) or "^$"
 
 
 def read_members(path):
@@ -103,6 +166,24 @@ def anneal_records(runs_dir):
     return found
 
 
+def parent_scores(runs_dir):
+    """Each anneal parent's fragment scores, as anneal.json measured them.
+
+    ARGS:
+        runs_dir (Path)
+
+    RETURNS:
+        dict: parent run name -> (validation, test) in points
+    """
+    found = {}
+    for path in sorted(runs_dir.glob("*/anneal.json")):
+        record = read_json(path)
+        parent = record["fragment_bacc10"]["parent"]
+        #the parent's run directory is the checkpoint's folder
+        found[Path(record["parent"]).parent.name] = (100 * parent["validation"], 100 * parent["test"])
+    return found
+
+
 def describe(pair):
     """Validation / test as text, or a dash.
 
@@ -122,6 +203,11 @@ def main():
     submissions_dir = Path(args.submissions_dir) if args.submissions_dir else SUBMISSIONS_DIR
     members = read_members(REPO_ROOT / args.members)
     annealed = anneal_records(runs_dir)
+
+    #one line for the robust step's SANITY switch, nothing else
+    if args.exclude_below:
+        print(exclude_regex(members, runs_dir, annealed, args.reference_runs, args.margin))
+        return
 
     print("| member | csv | dump | fragment val / test | against | verdict |")
     print("|---|---|---|---|---|---|")

@@ -1,0 +1,8 @@
+# All-0 K2 (trial 23's final night, 15 Oct) -- K2 (G2 plus the t5 layer-3
+# head) trained on all of subject 0, no other subject; see all0_g2.yaml.
+# Epochs: K2's own mean best count. Judged on the board only.
+run_name: trial18_all0k2
+
+second_embeddings: data/word_embeddings_t5_layer3.npz
+train_partitions: [train, validation, test]
+epochs_from: runs/trial18_k2_s*/evaluation.json

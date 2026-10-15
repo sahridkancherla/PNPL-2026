@@ -1,0 +1,18 @@
+# W-fixed (trial 23's final night, 15 Oct) -- the 4 x 1024 x 16 transformer
+# (53M, trial 12's w1024, which gave the mix +3.3 at the trial 10 recipe) on
+# G2's shaping with the fixed recipe of f0_fixed.yaml, scaled to the size:
+#   lr 3e-5 (between F1's 1e-4 and the 204M model's 1e-5), feed-forward
+#   dropout 0.1, EMA 0.999, fragments 0.4 beside isolated 0.1, patience 8.
+# ~2.7 min per epoch on an RTX6000. Judged added to the robust mix.
+run_name: trial18_wfixed
+
+model_kwargs:
+  d_model: 1024
+  n_heads: 16
+  dropout: 0.1
+
+lr: 3.0e-5
+ema_decay: 0.999
+fragment_p: 0.4
+patience: 8
+max_epochs: 50

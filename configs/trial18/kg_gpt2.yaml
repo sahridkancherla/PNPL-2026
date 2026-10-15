@@ -1,0 +1,8 @@
+# K-GPT2 (trial 23's final night, 15 Oct) -- K2's recipe with GPT-2-medium's
+# layer 12 as the second target space instead of t5's layer 3: G2 plus a jointly
+# trained second head (the pattern that gave Kn +1.7, K2 +1.5, K18 +0.3). The
+# table comes from pbs/trial23_lm_tables.pbs (cli.build_lm_embeddings; the
+# t5 table's words, in its order). Judged added to the robust mix.
+run_name: trial18_kg
+
+second_embeddings: data/word_embeddings_gpt2medium_layer12.npz

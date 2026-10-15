@@ -1,0 +1,9 @@
+# SSL-G2 (trial 23's final night, 15 Oct) -- G2 exactly, its word encoder
+# started from masked-span reconstruction pretraining instead of random
+# weights (cli.pretrain_encoder: every subject-0 recording plus the 40
+# subjects' holdout epochs, no labels; pbs/trial23_ssl.pbs). One pretraining,
+# three fine-tune seeds; the attention pool and the transformer start fresh.
+# Judged added to the robust mix.
+run_name: trial18_sslg2
+
+init_encoder_from: runs/trial23_ssl/encoder.pt

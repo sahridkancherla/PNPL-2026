@@ -1,0 +1,14 @@
+# TF (trial 23's final night, 15 Oct) -- the temporal-filter front-end of the
+# spherical-harmonics decoder (arXiv 2608.01481), in the form that differs on
+# SSS data: SSS already confines every channel to <= 96 spherical-harmonic
+# coefficients, and a fixed basis lost 7 points as F3 (PCA input), so the
+# merger stays and takes the paper's other two changes -- 25 spatial branches
+# instead of 270, and a trainable FIR filter of 0.5 s on each branch
+# (WordEncoder temporal_filter_kernel), the identity at the start. Then the
+# 1x1 back to 270 and G2's conv stack. G2's recipe. Judged added to robust.
+run_name: trial18_tf
+
+model_kwargs:
+  merger_channels: 25
+  initial_linear: 270
+  temporal_filter_kernel: 25

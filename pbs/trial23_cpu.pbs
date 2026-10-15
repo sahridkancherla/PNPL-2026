@@ -30,6 +30,9 @@
 #                                 qsub -v STEP=robust,INCLUDE=trial23_an_,NAME=anneal pbs/trial23_cpu.pbs
 #                            MEMBERS_FILE=configs/trial23/fresh.txt starts from set B instead (its SPW
 #                            is seeds 3-5 already, so its fourth mix repeats the 0.75 one).
+#                            PULL, NEIGHBOURS, SHARE_FLOOR, CHECK (transduce's knobs), SANITY=1,
+#                            SKIP_MISSING=1 and MERGE=<name>+<name>: see build_robust below, and
+#                            pbs/night2.sh, which chains these behind the training jobs.
 #
 # BASE is the holdout mix before the hub correction; default the 70.68
 # file's, submissions/ens_t22_tc1b75_ts.csv. STEP_ARGS adds anything else.
@@ -62,45 +65,94 @@ tool() {
 }
 
 # robust's four transduced mixes -- the members plus INCLUDE's new ones, minus EXCLUDE's --
-# averaged, then hub + lone rows.
+# averaged, then hub + lone rows. PULL, NEIGHBOURS and SHARE_FLOOR reach every transduce
+# call (defaults: the 70.849 file's); CHECK=N runs the local check on the 0.75 mix.
+# SANITY=1 also leaves out every new member cli.final_status puts more than a point
+# below G2 on fragments; SKIP_MISSING=1 leaves out a new member whose files are not
+# there instead of failing. MERGE=<name>+<name> skips the transduce stage and averages
+# the named builds' four pre-hub mixes each ("robust" is the 70.849 file's ens_t22 mixes).
 build_robust() {
     local name="${NAME:?submit with -v STEP=robust,NAME=<tag>[,INCLUDE=<regex>][,EXCLUDE=<regex>]}"
-    local base added runs alternative inputs pair run needed
-    base="$MEMBERS"
-    if [ -n "${MEMBERS_FILE:-}" ]; then
-        base="$(grep -v '^#' "$MEMBERS_FILE" | grep -v '^trial21_b' | tr '\n' ' ')"
-    fi
-    added=""
-    if [ -n "${INCLUDE:-}" ]; then
-        added="$(grep -v '^#' configs/trial23/newmembers.txt | grep -E "$INCLUDE" | tr '\n' ' ' || true)"
-        if [ -z "$added" ]; then
-            echo "[robust] INCLUDE=${INCLUDE} matches no line of configs/trial23/newmembers.txt" >&2
-            return 1
+    local base added kept runs alternative pair run needed missing exclude dropped mixes check_now
+    local pull="${PULL:-1.0}" neighbours="${NEIGHBOURS:-3}" share_floor="${SHARE_FLOOR:-0.005}" check="${CHECK:-0}"
+    exclude="${EXCLUDE:-}"
+    mixes=""
+    if [ -n "${MERGE:-}" ]; then
+        for run in ${MERGE//+/ }; do
+            if [ "$run" = "robust" ]; then
+                mixes="$mixes submissions/ens_t22_tc1b65_ts.csv submissions/ens_t22_tc1b75_ts.csv submissions/ens_t22_tc1b90_ts.csv submissions/ens_t22_tc1b75_spwalt_ts.csv"
+            else
+                mixes="$mixes submissions/ens_t23_${run}_tc1b65_ts.csv submissions/ens_t23_${run}_tc1b75_ts.csv submissions/ens_t23_${run}_tc1b90_ts.csv submissions/ens_t23_${run}_tc1b75_spwalt_ts.csv"
+            fi
+        done
+        for needed in $mixes; do
+            if [ ! -e "$needed" ]; then
+                echo "[robust] MERGE: not on RDS: $needed" >&2
+                return 1
+            fi
+        done
+        echo "[robust] MERGE: averaging $(echo $mixes | wc -w) pre-hub mixes of ${MERGE//+/ }"
+    else
+        base="$MEMBERS"
+        if [ -n "${MEMBERS_FILE:-}" ]; then
+            base="$(grep -v '^#' "$MEMBERS_FILE" | grep -v '^trial21_b' | tr '\n' ' ')"
         fi
-        #every new member needs its holdout CSV and its validation dump before an hour is spent
-        for run in $added; do
-            for needed in "submissions/${run}_in_context_ts.csv" "runs/${run}/dumps/reference_validation.npz"; do
-                if [ ! -e "$needed" ]; then
-                    echo "[robust] not on RDS: $needed" >&2
+        added=""
+        if [ -n "${INCLUDE:-}" ]; then
+            added="$(grep -v '^#' configs/trial23/newmembers.txt | grep -E "$INCLUDE" | tr '\n' ' ' || true)"
+            if [ -z "$added" ]; then
+                echo "[robust] INCLUDE=${INCLUDE} matches no line of configs/trial23/newmembers.txt" >&2
+                return 1
+            fi
+            #the sanity filter: new members more than a point below G2 on fragments
+            if [ "${SANITY:-0}" = "1" ]; then
+                dropped="$(tool final_status --members configs/trial23/newmembers.txt --exclude-below --margin 1 \
+                    --reference-runs runs/trial13_g2_s0 runs/trial13_g2_s1 runs/trial13_g2_s2 | tail -1)"
+                echo "[robust] SANITY: excluding '${dropped}'"
+                exclude="${exclude:+$exclude|}${dropped}"
+            fi
+            #every new member needs its holdout CSV and its validation dump before an hour is spent
+            kept=""
+            for run in $added; do
+                missing=""
+                for needed in "submissions/${run}_in_context_ts.csv" "runs/${run}/dumps/reference_validation.npz"; do
+                    [ -e "$needed" ] || missing="$needed"
+                done
+                if [ -n "$missing" ] && [ "${SKIP_MISSING:-0}" = "1" ]; then
+                    echo "[robust] SKIP_MISSING: ${run} left out, no ${missing}"
+                elif [ -n "$missing" ]; then
+                    echo "[robust] not on RDS: $missing" >&2
                     return 1
+                else
+                    kept="$kept $run"
                 fi
             done
+            added="$kept"
+            #nothing left to add: the file would be the base again, an hour for nothing
+            if [ -z "$added" ]; then
+                echo "[robust] no member of INCLUDE=${INCLUDE} has its files; nothing to build" >&2
+                return 1
+            fi
+        fi
+        runs="$(echo $base $added | tr ' ' '\n' | grep -v -E "${exclude:-^$}" | tr '\n' ' ')"
+        #SPW's seeds 3-5 (trial 20) in place of 0-2, for the fourth mix
+        alternative="$(echo $runs | tr ' ' '\n' | sed -e 's/^trial19_spw_s0$/trial20_spw_s3/' -e 's/^trial19_spw_s1$/trial20_spw_s4/' -e 's/^trial19_spw_s2$/trial20_spw_s5/' | tr '\n' ' ')"
+        echo "[robust] $(echo $runs | wc -w) members (added: ${added:-none}; pull ${pull}, ${neighbours} neighbours, share floor ${share_floor}): $runs"
+        for pair in 65:0.65 75:0.75 90:0.9; do
+            #the local check once, on the 0.75 mix: the one the blend curve peaked at
+            check_now=0
+            [ "${pair%%:*}" = "75" ] && check_now="$check"
+            tool transduce --inputs $(for r in $runs; do printf 'submissions/%s_in_context_ts.csv ' "$r"; done) --runs $runs \
+                --pull "$pull" --neighbours "$neighbours" --share-floor "$share_floor" --blend "${pair##*:}" \
+                --check "$check_now" --holdout-dir data/holdout --force \
+                --out "submissions/ens_t23_${name}_tc1b${pair%%:*}_ts.csv"
         done
+        tool transduce --inputs $(for r in $alternative; do printf 'submissions/%s_in_context_ts.csv ' "$r"; done) --runs $alternative \
+            --pull "$pull" --neighbours "$neighbours" --share-floor "$share_floor" --blend 0.75 --check 0 \
+            --holdout-dir data/holdout --force --out "submissions/ens_t23_${name}_tc1b75_spwalt_ts.csv"
+        mixes="submissions/ens_t23_${name}_tc1b65_ts.csv submissions/ens_t23_${name}_tc1b75_ts.csv submissions/ens_t23_${name}_tc1b90_ts.csv submissions/ens_t23_${name}_tc1b75_spwalt_ts.csv"
     fi
-    runs="$(echo $base $added | tr ' ' '\n' | grep -v -E "${EXCLUDE:-^$}" | tr '\n' ' ')"
-    #SPW's seeds 3-5 (trial 20) in place of 0-2, for the fourth mix
-    alternative="$(echo $runs | tr ' ' '\n' | sed -e 's/^trial19_spw_s0$/trial20_spw_s3/' -e 's/^trial19_spw_s1$/trial20_spw_s4/' -e 's/^trial19_spw_s2$/trial20_spw_s5/' | tr '\n' ' ')"
-    echo "[robust] $(echo $runs | wc -w) members (added: ${added:-none}): $runs"
-    for pair in 65:0.65 75:0.75 90:0.9; do
-        tool transduce --inputs $(for r in $runs; do printf 'submissions/%s_in_context_ts.csv ' "$r"; done) --runs $runs \
-            --pull 1.0 --blend "${pair##*:}" --check 0 --holdout-dir data/holdout --force \
-            --out "submissions/ens_t23_${name}_tc1b${pair%%:*}_ts.csv"
-    done
-    tool transduce --inputs $(for r in $alternative; do printf 'submissions/%s_in_context_ts.csv ' "$r"; done) --runs $alternative \
-        --pull 1.0 --blend 0.75 --check 0 --holdout-dir data/holdout --force --out "submissions/ens_t23_${name}_tc1b75_spwalt_ts.csv"
-    tool ensemble --inputs "submissions/ens_t23_${name}_tc1b65_ts.csv" "submissions/ens_t23_${name}_tc1b75_ts.csv" \
-        "submissions/ens_t23_${name}_tc1b90_ts.csv" "submissions/ens_t23_${name}_tc1b75_spwalt_ts.csv" \
-        --out "submissions/ens_t23_${name}_robust_ts.csv" --force
+    tool ensemble --inputs $mixes --out "submissions/ens_t23_${name}_robust_ts.csv" --force
     tool hubnorm_holdout --csv "submissions/ens_t23_${name}_robust_ts.csv" --method zscore --holdout-dir data/holdout --force
     tool lone_fill --csv "submissions/ens_t23_${name}_robust_ts_hubh.csv" --holdout-dir data/holdout --force \
         --lone-csvs submissions/trial15_i3_s{0,1,2}_in_context_ts.csv --lone-runs runs/trial15_i3_s{0,1,2}

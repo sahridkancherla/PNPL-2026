@@ -1,0 +1,10 @@
+# All-0 G2 (trial 23's final night, 15 Oct) -- G2 trained on all of subject
+# 0: pnpl's train, validation AND test recordings, and NO other subject (the
+# 54.8 of all_g2.yaml had 12 other subjects in). Local validation is then not
+# clean, so the run trains G2's own mean best epoch count, read off its three
+# runs, and keeps the last epoch; its local scores are flagged and mean
+# nothing. Judged on the board only, added to the robust mix.
+run_name: trial18_all0g2
+
+train_partitions: [train, validation, test]
+epochs_from: runs/trial13_g2_s*/evaluation.json

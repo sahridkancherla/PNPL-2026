@@ -1,0 +1,7 @@
+# K-Qwen (trial 23's final night, 15 Oct) -- K2's recipe with Qwen2.5-1.5B's
+# layer 14 (1536 wide) as the second target space. The second head takes its
+# table's width (models/net.py second_embed_dim). Table from
+# pbs/trial23_lm_tables.pbs. Judged added to the robust mix.
+run_name: trial18_kq
+
+second_embeddings: data/word_embeddings_qwen15_layer14.npz

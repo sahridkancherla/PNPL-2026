@@ -88,6 +88,10 @@ if cfg.has_refiner:
 if cfg.has_second_head:
     needed.append(cfg.resolved_second_embeddings())
 
+# trial 23's SSL: the pretrained encoder, from pbs/trial23_ssl.pbs
+if cfg.init_encoder_from:
+    needed.append(cfg.resolved_init_encoder_from())
+
 # all-data: the other subjects' cache, from pbs/trial18_build_others.pbs
 if cfg.others_cache_dir:
     needed.append(cfg.resolved_others_cache_dir() / "manifest.json")

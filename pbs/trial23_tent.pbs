@@ -1,0 +1,58 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=32gb:ngpus=1:gpu_type=RTX6000
+#PBS -l walltime=00:45:00
+#PBS -N pnpl-trial23-tent
+#PBS -j oe
+#PBS -o logs/
+
+# Trial 23, final night: TTA by entropy minimisation (cli.tent) on one
+# per-word member per array task -- G2, K2, K18 at seeds 0-2 -- then its
+# reference dumps (cli.evaluate, for the transduction) and its holdout CSV
+# (cli.predict). Minutes each. From the repo root:
+#
+#     bash pbs/night2.sh tent      these 9, then the rebuild with them in their parents' place
+#     qsub -J 1-9 pbs/trial23_tent.pbs
+#
+# Writes runs/<member>_tent/ (best.ckpt, tent.json, evaluation.json, dumps/)
+# and submissions/<member>_tent_in_context_ts.csv.
+#
+# ⚠️ Needs on RDS: the members' checkpoints, data/trial10_reference/, data/holdout/,
+# data/trial23_training_scaler.npz. Nothing downloads.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+export PYTHONUNBUFFERED=1
+export UV_OFFLINE=1 HF_HUB_OFFLINE=1
+
+INDEX="${PBS_ARRAY_INDEX:-${RUN:-}}"
+if [ -z "$INDEX" ]; then
+    echo "no member chosen: submit with -J 1-9, or -v RUN=<1-9>" >&2
+    exit 1
+fi
+MEMBERS=(trial13_g2_s0 trial13_g2_s1 trial13_g2_s2 trial18_k2_s0 trial18_k2_s1 trial18_k2_s2
+         trial18_k18_s0 trial18_k18_s1 trial18_k18_s2)
+MEMBER="${MEMBERS[$((INDEX - 1))]}"
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.tent23_${MEMBER}.live.log"
+echo "member ${INDEX}: ${MEMBER}; live log: $LIVE_LOG"
+
+{
+    for needed in "runs/${MEMBER}/best.ckpt" data/trial10_reference/manifest.json data/trial23_training_scaler.npz \
+                  data/holdout/COMPETITION_HOLDOUT/subj00_holdout01_sentence.npz; do
+        if [ ! -e "$needed" ]; then
+            echo "[preflight] not on RDS: $needed" >&2
+            exit 1
+        fi
+    done
+    STAGED_CACHE="${TMPDIR:?not set -- submit with qsub}/trial10_reference"
+    SECONDS=0
+    cp -r data/trial10_reference "$STAGED_CACHE"
+    echo "[stage] cache copied in ${SECONDS}s"
+
+    uv run --frozen python -m pnpl2026.trial23.cli.tent --ckpt "runs/${MEMBER}/best.ckpt" --holdout-dir data/holdout --force
+    uv run --frozen python -m pnpl2026.trial23.cli.evaluate --ckpt "runs/${MEMBER}_tent/best.ckpt" --cache-dir "$STAGED_CACHE" \
+        --protocols reference fragment --num-workers 8 --dump
+    uv run --frozen python -m pnpl2026.trial23.cli.predict --ckpt "runs/${MEMBER}_tent/best.ckpt" --holdout-dir data/holdout
+} 2>&1 | tee "$LIVE_LOG"

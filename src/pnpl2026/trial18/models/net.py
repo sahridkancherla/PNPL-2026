@@ -68,6 +68,7 @@ class ReferenceNet(nn.Module):
         second_head=False,
         refine=None,
         n_subjects=1,
+        second_embed_dim=None,
         **encoder_kwargs,
     ):
         """
@@ -116,8 +117,9 @@ class ReferenceNet(nn.Module):
         #only a narrower transformer needs a map to the t5 width
         self.project = nn.Identity() if d_model == embed_dim else nn.Linear(d_model, embed_dim)
 
-        #Variant K: the same word vector, mapped into the second target space
-        self.project_second = nn.Linear(d_model, embed_dim) if second_head else None
+        #Variant K: the same word vector, mapped into the second target space,
+        #which trial 23's language-model tables make wider than t5's
+        self.project_second = nn.Linear(d_model, second_embed_dim or embed_dim) if second_head else None
 
         #Variant M: a bounded correction from chosen conv layers' outputs
         self.refiner = None

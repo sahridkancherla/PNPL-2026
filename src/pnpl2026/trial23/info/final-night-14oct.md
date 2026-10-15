@@ -161,11 +161,67 @@ recompute its BatchNorm statistics on training windows (not built).
 
 Filled in as they arrive: the sanity verdicts, then the board.
 
-| member group | fragment val / test vs parent | verdict | board (robust + group) |
-|---|---|---|---|
-| anneal (`trial23_an_`) | | | |
-| SAM (`trial23_sam_`) | | | |
-| GPT-2 heads (`trial23_hg_`) | | | |
-| Qwen heads (`trial23_hq_`) | | | |
-| tower 0.7 (`_tw07`) | | | |
-| F0 fixed | | | |
+Board, 15 Oct (robust + the group, against robust's 70.849). None beat it.
+
+| file (`ens_t23_<name>_robust_ts_hubh_lone`) | members added | board |
+|---|---|---|
+| `f0fixed` | F0 fixed | 70.849 (tie, to the digit) |
+| `tower` | SPW s0-5 at tower weight 0.7 | 70.599 |
+| `towerswap` | SPW s0-2 replaced by their 0.7 versions | 69.849 |
+| `heads` | 6 GPT-2 / Qwen heads on G2 | 70.313 |
+| `all` | every group above and below | 69.599 |
+| `noN` (13 Oct, for reference) | robust without N | 69.199 |
+| `anneal` | 5 annealed G2 / w1024 | 69.163 |
+| `sam` | 5 SAM anneals | 69.163 (same as anneal, to the digit) |
+
+The anneal, a recipe the note ranked highest, cost 1.7 points as an
+addition. The two exact ties (f0fixed = robust, sam = anneal) must be
+checked for identical files before anything is read into them.
+
+## The second night (15 -> 16 Oct): research and the portfolio
+
+Nothing from the first night beat 70.849 (above). The user asked for anything
+that could still raise the public score, with self-supervision on the holdout,
+a Conformer, MEGState and a spherical-harmonics / temporal-filter front-end
+named. What the research found (15 Oct):
+
+- The 2025 phoneme track's winner was one compact Conformer (MEGConformer,
+  arXiv 2512.01443) whose decisive trick, instance normalisation, lost 6-7
+  points here (trial 15): 2025 scored 100-trial averages, this track single
+  trials. MEGState's multi-resolution stem (arXiv 2512.17978) is already
+  SPW's. The spherical-harmonics decoder (arXiv 2608.01481) replaces the
+  spatial attention by a fixed SH basis -- which SSS has already imposed on
+  this data (rank ~73-96; F3's fixed basis lost 7) -- and adds 25 branches
+  with trainable temporal filters, the part built here.
+- Test-time adaptation in the literature (entropy minimisation on norm layers,
+  alignment, SSL-then-TTT) is EEG/sEEG; here AdaBN, re-centring and
+  pseudo-label distillation each lost 3-5. Pretrained MEG foundation models
+  reach 63 on this task (supervised ~73); MEG-XL's features failed P4.
+- Subject-0-only all-data was never on the board (the 54.8 had 12 other
+  subjects). Transduction's pull 2, neighbours and share floor were never
+  varied.
+
+Built and queued (`pbs/night2.sh`, one dependency chain per family: train ->
+predict -> robust rebuild with `SANITY=1` (more than a point below G2 on
+fragments is left out) and `SKIP_MISSING=1`):
+
+| stage | members | new code |
+|---|---|---|
+| today | transduction pull 2 (local check), 6 neighbours, both; robust8 = robust + pull2 mixes averaged | robust step `PULL`, `NEIGHBOURS`, `SHARE_FLOOR`, `CHECK`, `MERGE` |
+| configs | K-GPT2, K-Qwen (joint second heads), W-fixed (4 x 1024, lr 3e-5, dropout 0.1, EMA), All-0 G2 + K2, F0-fixed s1-2 | trial 18 `second_embed_dim` |
+| ssl | G2 fine-tuned from masked-span reconstruction of every subject-0 recording + 40 subjects' holdout epochs | `cli/pretrain_encoder.py`, `init_encoder_from` |
+| tf | merger to 25 branches, a 0.5 s FIR filter per branch | `WordEncoder.temporal_filter_kernel` |
+| conformer | 4 Conformer blocks in place of the dilated convs | `models/conformer.py`, `WordEncoder.temporal` |
+| tent | BatchNorm affine of G2/K2/K18 adapted by entropy minimisation on the holdout sentences, in their parents' place | `cli/tent.py` |
+| all | every family above that passed, together | -- |
+
+Checks (laptop, synthetic): the robust switches in a stubbed dry run; the
+chains with a fake qsub; trial 18's second head 19 wide; the five configs;
+the sanity filter's threshold; SSL pretraining runs and learns on real
+holdout MEG (unexplained hidden variance 107% -> 91% in 200 tiny-model
+steps), the fine-tune loads 41 encoder tensors; the Conformer and the FIR
+encoder pass the shape check (distinct primes, padding junk changes nothing,
+rows alone = rows batched within 5e-4, gradients everywhere; the FIR at its
+identity start equals the plain encoder exactly) and train one epoch through
+trial 18's trainer and predict through trial 23's; Tent moves only BatchNorm's
+affine tensors and lowers the entropy.

@@ -112,6 +112,9 @@ class Trial18Config(Config):
         accelerator (str): "auto", "cuda" or "cpu"
         refine_base (str): Variant M -- a checkpoint, repo-relative, `{seed}`
             filled in; "" means no refiner
+        init_encoder_from (str): trial 23's SSL -- a word encoder's state dict
+            (cli.pretrain_encoder's encoder.pt), repo-relative, `{seed}`
+            filled in; loaded before the fit, the pool left fresh. "" is none
         refine_layers (list): ConvSequence layers read, the gated outputs of
             HDND's stages 2 and 4
         refine_bins (list): time resolutions pooled
@@ -182,6 +185,9 @@ class Trial18Config(Config):
     ema_decay: float = 0.0
     matmul_precision: str = "high"
     precision: str = "32"
+
+    # --- trial 23's SSL: the encoder from masked-reconstruction pretraining ---
+    init_encoder_from: str = ""
 
     # --- Variant M: HDND's refinement on a frozen checkpoint ---
     refine_base: str = ""
@@ -342,6 +348,10 @@ class Trial18Config(Config):
     def has_refiner(self):
         """Whether this run carries Variant M's refiner."""
         return bool(self.refine_base)
+
+    def resolved_init_encoder_from(self):
+        """Absolute path to the pretrained encoder, this run's seed filled in; None without one."""
+        return REPO_ROOT / self.init_encoder_from.format(seed=self.seed) if self.init_encoder_from else None
 
     def resolved_refine_base(self):
         """Absolute path to the frozen base checkpoint, this run's seed filled in."""

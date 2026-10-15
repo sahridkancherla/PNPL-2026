@@ -1,0 +1,16 @@
+# CONF (trial 23's final night, 15 Oct) -- the per-word encoder with a
+# Conformer in place of the ten dilated convs (WordEncoder temporal:
+# conformer, models/conformer.py): 4 blocks of 160 wide, 4 heads, depthwise
+# kernel 15 (0.3 s), dropout 0.1; the merger, 1x1, subject layer, final 1x1
+# pair and attention pool as G2's. The 2025 phoneme track's winning backbone
+# (MEGConformer), untested on single-trial words. G2's recipe; about twice
+# G2's time per epoch, so submit with -l walltime=06:00:00. Judged added to
+# robust.
+run_name: trial18_conf
+
+model_kwargs:
+  temporal: conformer
+  conformer_depth: 4
+  conformer_heads: 4
+  conformer_kernel: 15
+  conformer_dropout: 0.1

@@ -1,0 +1,50 @@
+#!/bin/bash
+#PBS -l select=1:ncpus=8:mem=64gb:ngpus=1:gpu_type=RTX6000
+#PBS -l walltime=02:30:00
+#PBS -N pnpl-trial23-ssl
+#PBS -j oe
+#PBS -o logs/
+
+# Trial 23, final night: the SSL pretraining of G2's word encoder
+# (cli.pretrain_encoder, masked-span reconstruction on every subject-0
+# recording plus the 40 subjects' holdout epochs; no labels). Stops after
+# HOURS (default 1.75) -> runs/trial23_ssl/encoder.pt, then lines 52-54 of
+# configs/trial18/runs.txt fine-tune G2 from it. From the repo root:
+#
+#     bash pbs/night2.sh ssl        this job, then the fine-tunes, predict and rebuild behind it
+#     qsub pbs/trial23_ssl.pbs      this job alone
+#
+# ⚠️ Needs on RDS: data/trial10_reference/, data/holdout/ (subjects 0-39; a
+# missing subject is skipped), data/trial23_training_scaler.npz. Nothing downloads.
+
+set -euo pipefail
+
+cd "$HOME/PNPL-2026"
+source "$HOME/.local/bin/env"
+export PYTHONPATH="$PWD/src"
+export PYTHONUNBUFFERED=1
+export UV_OFFLINE=1 HF_HUB_OFFLINE=1
+
+LIVE_LOG="logs/${PBS_JOBID%%[.[]*}.trial23_ssl.live.log"
+echo "SSL pretraining; live log: $LIVE_LOG"
+
+{
+    for needed in data/trial10_reference/manifest.json data/trial23_training_scaler.npz \
+                  data/holdout/COMPETITION_HOLDOUT/subj00_holdout01_sentence.npz; do
+        if [ ! -e "$needed" ]; then
+            echo "[preflight] not on RDS: $needed" >&2
+            exit 1
+        fi
+    done
+
+    # The crops are random reads all over the recordings: stage the cache locally.
+    STAGED_CACHE="${TMPDIR:?not set -- submit with qsub}/trial10_reference"
+    SECONDS=0
+    cp -r data/trial10_reference "$STAGED_CACHE"
+    echo "[stage] cache copied in ${SECONDS}s"
+
+    uv run --frozen python -m pnpl2026.trial23.cli.pretrain_encoder \
+        --config configs/base.yaml configs/trial18/trial18.yaml configs/trial18/hpc.yaml \
+        --run-name trial23_ssl --cache-dir "$STAGED_CACHE" --holdout-dir data/holdout \
+        --hours "${HOURS:-1.75}" --num-workers 8 --force ${SSL_ARGS:-}
+} 2>&1 | tee "$LIVE_LOG"

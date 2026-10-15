@@ -265,6 +265,19 @@ def main():
               f"{second_table.embed_dim}, loss weight {cfg.second_loss_weight:g}")
     model = LitTrialEighteen(cfg, table, second_table=second_table)
 
+    #trial 23's SSL: the word encoder starts from masked-reconstruction pretraining;
+    #a --resume overwrites it with last.ckpt anyway
+    if cfg.init_encoder_from:
+        source = cfg.resolved_init_encoder_from()
+        if not source.exists():
+            raise SystemExit(f"init_encoder_from {source} does not exist.")
+        pretrained = torch.load(source, map_location="cpu", weights_only=True)
+        missing, unexpected = model.model.encoder.load_state_dict(pretrained, strict=False)
+        stray = [name for name in missing if not name.startswith("pool.")]
+        if unexpected or stray:
+            raise SystemExit(f"The pretrained encoder does not fit: unexpected {unexpected[:5]}, missing {stray[:5]}")
+        print(f"[train] encoder initialised from {cfg.init_encoder_from}: {len(pretrained)} tensors, the pool fresh")
+
     #Variant M: the base's weights in, frozen; the refiner's statistics measured
     if base_module is not None:
         missing, unexpected = model.load_state_dict(base_module.state_dict(), strict=False)

@@ -49,6 +49,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
+from .conformer import ConformerStack
 from .merger import ChannelMerger, FixedPCA, LinearSpatial, SubjectLayer
 
 #the three spatial front ends a config can name
@@ -56,6 +57,9 @@ SPATIAL_KINDS = ("merger", "linear", "pca")
 
 #how each window is normalised on entry: as trained so far, or by its own statistics
 INPUT_NORMS = ("none", "instance")
+
+#what reads the virtual channels over time: the dilated convs, or trial 23's Conformer
+TEMPORAL_KINDS = ("conv", "conformer")
 
 
 class MaskedBatchNorm1d(nn.BatchNorm1d):
@@ -325,6 +329,12 @@ class WordEncoder(nn.Module):
         input_norm="none",
         input_norm_eps=1e-5,
         n_subjects=1,
+        temporal="conv",
+        temporal_filter_kernel=0,
+        conformer_depth=4,
+        conformer_heads=4,
+        conformer_kernel=15,
+        conformer_dropout=0.1,
     ):
         """
         ARGS:
@@ -354,10 +364,21 @@ class WordEncoder(nn.Module):
                 window standardised per channel by its own statistics
             input_norm_eps (float): variance floor for "instance"
             n_subjects (int): subject layers; above 1 only for all-data training
+            temporal (str): trial 23 -- "conv", the dilated stack, or
+                "conformer" (`conformer.py`) in its place
+            temporal_filter_kernel (int): trial 23 -- odd > 0 puts one
+                trainable FIR filter of this many taps on every virtual channel
+                after the spatial layer, the identity at the start; 0 is none
+            conformer_depth, conformer_heads, conformer_kernel,
+            conformer_dropout: the Conformer's, with temporal "conformer"
         """
         super().__init__()
         if spatial not in SPATIAL_KINDS:
             raise ValueError(f"spatial must be one of {SPATIAL_KINDS}, got {spatial!r}")
+        if temporal not in TEMPORAL_KINDS:
+            raise ValueError(f"temporal must be one of {TEMPORAL_KINDS}, got {temporal!r}")
+        if temporal_filter_kernel and temporal_filter_kernel % 2 == 0:
+            raise ValueError(f"temporal_filter_kernel must be odd, got {temporal_filter_kernel}")
         if input_norm not in INPUT_NORMS:
             raise ValueError(f"input_norm must be one of {INPUT_NORMS}, got {input_norm!r}")
 
@@ -385,6 +406,15 @@ class WordEncoder(nn.Module):
             self.spatial = FixedPCA(pca["mean"], pca["components"], pca["scale"])
             width = self.spatial.out_channels
 
+        #trial 23: a FIR filter per virtual channel (groups=width), the identity at the start
+        self.temporal_filter = None
+        if temporal_filter_kernel:
+            self.temporal_filter = nn.Conv1d(width, width, temporal_filter_kernel, padding=temporal_filter_kernel // 2,
+                                             groups=width, bias=False)
+            nn.init.zeros_(self.temporal_filter.weight)
+            with torch.no_grad():
+                self.temporal_filter.weight[:, 0, temporal_filter_kernel // 2] = 1.0
+
         #brainmagick's initial_linear: a 1x1 conv with no activation after it
         self.initial_linear = nn.Identity()
         if initial_linear:
@@ -393,17 +423,21 @@ class WordEncoder(nn.Module):
 
         self.subject = SubjectLayer(width, n_subjects) if subject_layer else nn.Identity()
 
-        #[width] then `depth` layers of `hidden`: the first layer has no skip
-        self.convs = ConvSequence(
-            [width] + [hidden] * depth,
-            kernel_size=kernel_size,
-            dilation_growth=dilation_growth,
-            dilation_period=dilation_period,
-            batch_norm=batch_norm,
-            skip=skip,
-            glu=glu,
-            glu_context=glu_context,
-        )
+        #trial 23: the Conformer reads the same channels and hands `hidden` on, as the convs do
+        if temporal == "conformer":
+            self.convs = ConformerStack(width, hidden, conformer_depth, conformer_heads, conformer_kernel, conformer_dropout)
+        else:
+            #[width] then `depth` layers of `hidden`: the first layer has no skip
+            self.convs = ConvSequence(
+                [width] + [hidden] * depth,
+                kernel_size=kernel_size,
+                dilation_growth=dilation_growth,
+                dilation_period=dilation_period,
+                batch_norm=batch_norm,
+                skip=skip,
+                glu=glu,
+                glu_context=glu_context,
+            )
 
         #brainmagick's complex_out: widen, activate, project to d_model
         self.final = nn.Sequential(
@@ -496,6 +530,9 @@ class WordEncoder(nn.Module):
 
         #sensors -> virtual channels -> subject space, padding kept at zero
         x = self.spatial(x)
+        #trial 23: each virtual channel through its own FIR filter, padding kept at zero
+        if self.temporal_filter is not None:
+            x = self.temporal_filter(x * mask) * mask
         x = self.initial_linear(x)
         x = (self.subject(x, subject) if isinstance(self.subject, SubjectLayer) else self.subject(x)) * mask
         x, tapped = self.convs.forward_with_taps(x, mask, tap_layers)
