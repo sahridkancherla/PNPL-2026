@@ -225,3 +225,52 @@ rows alone = rows batched within 5e-4, gradients everywhere; the FIR at its
 identity start equals the plain encoder exactly) and train one epoch through
 trial 18's trainer and predict through trial 23's; Tent moves only BatchNorm's
 affine tensors and lowers the entropy.
+
+Board, 15 Oct evening (transduction settings, against 70.849):
+
+| file | setting | local check (transduced minus plain) | board |
+|---|---|---|---|
+| `pull2nb6` (`_ts_hubh`, no lone fill) | pull 2, 6 neighbours | not run | 70.842 (tie) |
+| `nb6` | pull 1, 6 neighbours | not run | 70.147 |
+| `robust8` | robust's four mixes + pull 2's four, averaged | pull 2's: -2.44, wins 5% | 69.747 |
+
+Pull 2 alone failed its local check by 2.4 against pull 1's ~0, yet pull 2
+with 6 neighbours ties the best on the board: the local check again does
+not rank settings. Six neighbours alone lost 0.7.
+
+Board, 16 Oct morning (against 70.849):
+
+| file | what | board |
+|---|---|---|
+| `robustpn` | robust's 4 mixes + pull2nb6's 4, averaged | **71.432, new best** |
+| `sslg2` | + SSL-G2 (3) | 70.849 (tie) |
+| `wfixed` | + W-fixed (3) | 69.849 |
+| `conf` | + Conformer (3) | 69.849 |
+| `all0` | + All-0 G2/K2 (4 passed) | 69.599 |
+| `f0fam` | + F0-fixed s0-2 | 69.449 |
+| `kgq` | + K-GPT2/K-Qwen (3 passed) | 69.313 |
+| `all` | every family together (43 members) | 67.849 |
+
+No trained family helped; SSL-G2 tied, like F0-fixed. The only gain of the
+two nights is, again, averaging transduction settings that each tie the best.
+| `sslpn` | sslg2's 4 mixes + pull2nb6's 4, averaged (robustpn with SSL in the pull-1 half) | 71.032 (-0.40 against robustpn) |
+| `robustpn3` | robust + pull2nb6 + pull 1.5 / 5 neighbours, 12 mixes averaged | 71.032 (-0.40 against robustpn) |
+
+⚠️ The second night's `all` rebuild overwrote the first night's
+`ens_t23_all_robust_ts_hubh_lone.csv` (69.599 on 15 Oct); the file on disk
+is the 16 Oct one (67.849).
+
+## Final picks (16 Oct, by 12:59 BST)
+
+| # | file | public |
+|---|---|---|
+| 1 | `ens_t23_robustpn_robust_ts_hubh_lone` | 71.432 |
+| 2 | `ens_t23_sslpn_robust_ts_hubh_lone` | 71.032 |
+| 3 | `ens_t23_robustpn3_robust_ts_hubh_lone` | 71.032 |
+| 4 | `ens_t23_robust_ts_hubh_lone` | 70.849 |
+| 5 | `ens_t23_robustb_ts_hubh_lone` | 70.849 |
+| 6 | `ens_t23_f0fixed_robust_ts_hubh_lone` | 70.849 |
+| 7 | `ens_t23_sslg2_robust_ts_hubh_lone` | 70.849 |
+| 8 | `ens_t23_pull2nb6_robust_ts_hubh` (no lone fill) | 70.842 |
+| 9 | `ens_t23_blendavg_ts_hubh_lone` | 70.682 |
+| 10 | `ens_t22_tc1b75_ts_hubh_lone` | 70.682 |
