@@ -22,6 +22,9 @@
 #     recentre_reference     P8b: the training covariance (cli.recentre reference)
 #     recentre_check         P8b: with against without, both held-out partitions
 #     finish                 BASE through the hub correction and I3's lone rows -> <BASE stem>_hubh_lone.csv
+#     handover_check         rebuild PICK (default robustpn) from the member CSVs with cli.handover, after
+#                            `cli.handover pack`, and compare it with the submitted file -> handover_rebuild/<PICK>/
+#                            (about 2 h for robustpn's 8 mixes: submit with -l walltime=04:00:00)
 #     robust                 robust's recipe rebuilt from the 23 members plus INCLUDE (a regex on the
 #                            lines of configs/trial23/newmembers.txt) minus EXCLUDE (a regex on run
 #                            names): blends 0.65/0.75/0.9, and 0.75 with SPW seeds 3-5, averaged, then
@@ -182,6 +185,8 @@ build_robust() {
                                   --lone-csvs submissions/trial15_i3_s{0,1,2}_in_context_ts.csv \
                                   --lone-runs runs/trial15_i3_s{0,1,2} ${STEP_ARGS:-} ;;
         robust)               build_robust ;;
+        handover_check)       tool handover reproduce --pick "${PICK:-robustpn}" --recipes handover/pnpl2026_deep/recipes.json \
+                                  --holdout-dir data/holdout --reuse-member-csvs ${STEP_ARGS:-} ;;
         *)
             echo "unknown STEP ${STEP}; the steps are listed in this script's header" >&2
             exit 1 ;;

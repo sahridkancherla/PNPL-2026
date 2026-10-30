@@ -18,3 +18,7 @@ lightning_logs/
 !/logs/.gitkeep
 /submissions/*
 !/submissions/.gitkeep
+
+# The organisers' package (cli.handover pack): checkpoints, never in git.
+/handover/
+/handover_rebuild/

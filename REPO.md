@@ -23,6 +23,7 @@ Keep this file current. A stale map is worse than none.
 | `runs/` | checkpoints and per-run logs. Gitignored except `.gitkeep`. |
 | `logs/` | PBS job output and live logs. Gitignored except `.gitkeep`. |
 | `submissions/` | generated submission CSVs. Gitignored except `.gitkeep`. |
+| `handover/` | gitignored. The organisers' verification package, written by `pnpl2026.trial23.cli.handover pack`: the final picks' member checkpoints, dumps, scaler, CSVs, `code.tar.gz`, `recipes.json`, `HANDOVER.md`, `MANIFEST.sha256`; `handover_rebuild/` holds `reproduce` runs. |
 | `data/` | downloaded LibriBrain cache. Gitignored entirely; created by `cli.prepare`. |
 | `tutorial.ipynb` | the competition's own walkthrough notebook, kept as reference. |
 | `pyproject.toml`, `uv.lock` | dependencies. `uv` manages the environment. |

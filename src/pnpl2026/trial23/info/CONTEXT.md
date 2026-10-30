@@ -12,6 +12,7 @@ families, prediction, ensembling, transduction, hub correction).
 | anneal and head-only training, SAM, per-word scoring | `../cli/anneal.py`, `../perword/sam.py`, `../perword/evaluation.py` |
 | another language model's target table; the tower weight | `../cli/build_lm_embeddings.py`; `--tower-weight` in predict and evaluate |
 | night 2: SSL pretraining, TTA, the chained submit script | `../cli/pretrain_encoder.py`, `../cli/tent.py`, `pbs/night2.sh` |
+| the organisers' package: pack the final picks' checkpoints, rebuild any pick | `../cli/handover.py` |
 | the testbed: shared audio check, labelled replica of the holdout | `../cli/testbed_check.py`, `../cli/testbed.py` |
 | P1/SNF/P3/P8a: residual features, votes, holdout candidates | `../crossfeatures.py`, `../crossvotes.py`, `../cli/cross_graph.py` |
 | P6: boundary features, fine-tune, diagnose and apply | `../boundary.py`, `../cli/finetune.py`, `../cli/boundary.py` |
